@@ -75,7 +75,7 @@ projectTypeAndRestFromCommandTypes cst = case sort cst of
 
 projectTypeFromCommandTypes :: [CommandType] -> ProjectType
 projectTypeFromCommandTypes =
-  fst . projectTypeAndRestFromCommandTypes
+  sst . projectTypeAndRestFromCommandTypes
 
 restOfCommandTypes :: [CommandType] -> [CommandType]
 restOfCommandTypes = snd . projectTypeAndRestFromCommandTypes
