@@ -1,0 +1,14 @@
+Aula Tal => dur 1h
+         & endpoint 15/03 10h
+         & init today 14h
+         & cycle 2 in 1 Week.
+
+Palestra => dur 1h & init 15/03 15:03 & today
+         & msg Hey you brown \cow
+         & msgs Hey you; Brown\cow; yea
+         & at UNB.
+
+Palestra2 => dur 1h & init 15/03 15:03 & endpoint 17 & totaltime 30d
+          & msg Hey you brown \cow
+          & msgs Hey you; Brown\cow; yea
+          & at UNB.

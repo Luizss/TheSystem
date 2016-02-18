@@ -1,0 +1,16 @@
+* TODO e lembretes
+** Arquivo para erros
+** Arquivo Helper - Necessario?
+** Fazer Comandos do tipo Costs
+** Comandos do tipo 'notins' poderao parsear instantes ou palavras especiais como "thrusday" e etc
+** Porque instant parser nao aceita hourMin? - Command.hs
+   Analisar o caso.
+** Testar todos instant parsers (Parser e String -> ...)
+** Init e Endpoint usam instantParser. Poderia ser substituido por parseText instantParserP?
+* O que esta decidido
+** Sleeping sera um projeto normal com prioridade maxima no algoritmo
+** Sleeping_penalty e o projeto que substitui Sleeping em um caso de saturaçao. Isso pode ocorrer tambem para qualquer outro projeto.
+** Saturaçao: quando nao e possivel fazer tudo que se quer
+** Em caso saturaçao o algoritmo tenta aplicar penalidades aos projetos que tem penalidades
+   Se nao funcionar, o usuario pode escolher projetos para serem sacrificados.
+   Se tambem nao funcionar o algoritmo tenta usar penalidade e sacrificios.

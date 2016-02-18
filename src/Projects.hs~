@@ -1,0 +1,53 @@
+module Projects where
+
+import Parser
+import Data.List
+
+--------------------- Data
+
+-- CCE : Constraints,Costs,EndConditions
+
+data Constraint = Untill
+                deriving (Show,Eq)
+
+data Cost = Hello
+          deriving (Show,Eq)
+                   
+data EndCondition = Endcon
+                  | NoEndCondition
+                  deriving (Show,Eq)
+
+data Project = Project Name [Constraint] [Cost] EndCondition
+             deriving (Show,Eq)
+
+data Either3 a b c = Fst a | Snd b | Thd c
+
+--------------------- Projects' Creation
+
+createProjects :: [Parsed] -> [Project]
+createProjects = nub . map createProject
+
+createProject :: Parsed -> Project
+createProject (Parsed name comms) =
+  Project name cons costs (check ends)
+  where eithers = map fromCommandsToCCE comms
+        (cons, costs, ends) = separateCCE eithers
+        check []     = NoEndCondition
+        check [end]  = end
+        check (x:xs) = error "MoreThanOneEndCondition"
+
+fromCommandsToCCE ::
+  (Keyw, Args) -> Either3 Constraint Cost EndCondition
+fromCommandsToCCE (name,args) = case name of
+  "untill" -> Fst Untill
+  "hello"  -> Snd Hello
+  "end"    -> Thd Endcon
+  _        -> Snd Hello
+
+separateCCE :: [Either3 Constraint Cost EndCondition]
+            -> ([Constraint],[Cost],[EndCondition])
+separateCCE lst = go lst [] [] []
+  where go (Fst x : xs) cons costs ends = go xs (x:cons) costs ends
+        go (Snd x : xs) cons costs ends = go xs cons (x:costs) ends
+        go (Thd x : xs) cons costs ends = go xs cons costs (x:ends)
+        go [] cons costs ends = (nub cons, nub costs, nub ends)

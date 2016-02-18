@@ -1,0 +1,60 @@
+
+Na Manha => dur 10m
+         & durs 2h:10m:30m, 30m, 15m, 2 days, 8 mo, 15 mins
+         & dursi 10m, 30m
+         & dursn Primeira Etapa : 15m, Segunda Etapa : 30 d
+         & dursni Primeira Etapa : 15d, Segunda Etapa : 30 mo.
+
+Lavar Roupa => division 30m, 1h - 6h, 15m, none
+            & divisionn fst : 30m, 1h - 6h, Fim : 15m, none
+            & divisions 30m, 1h - 6h, 15m, none ; 30m, 1h - 6h, 15m, none; 30m, 1h - 6h, 15m, none
+            & divisionsn 
+
+              asdasd : 30m, 1h - 6h, 
+              hey : 15m, none ;
+              
+              wat : 30m, 1h - 6h,
+              brown : 15m, none;
+              
+              now: 30m, 1h - 6h,
+              cow : 15m, none
+
+            & divisionsnn 
+              
+              1 Step : 
+              
+              asdasd : 30m, 1h - 6h,
+              hey : 15m, none;
+
+              2 Step :
+
+              wat: 30m, 1h - 6h,
+              brown: 15m, none;
+
+              3 Step :
+
+              now: 30m, 1h - 6h,
+              cow: 15m, none.
+     
+
+Palestra => dur 1h
+         & msg Hey you brown \cow
+         & msgs Hey you; Brown\cow; yea
+         & at UNB.
+
+Aula Tal => notin december or (5d - 4/3 and thursday) or 7h+ or (15/            03/1996 and 17/03/1995) or
+            15h-13h:3m or 13:30-13h:30 or 13:30m
+         & dur 1h
+         & today 
+         & endpoint 15
+         & endpoint 7h
+         & endpoint 15/03
+         & endpoint 15/03/1995
+         & endpoint 15 7h
+         & endpoint 15/03 7h
+         & endpoint 15 7:30
+         & endpoint 15/03 7:30
+         & endpoint 15/03/1995 7h
+         & endpoint 15/03/1995 7:30
+         & endpoint 15/03/1995 7h:30m
+         & cycle 2 in 1 Week.

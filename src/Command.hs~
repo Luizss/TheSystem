@@ -1,0 +1,579 @@
+module Command where
+
+-------------------- Imports
+
+import Prelude hiding (cycle, init)
+import Data
+import Parser
+import Text.Parsec
+import Data.Time
+import Data.Time.Format
+import Data.Char (toLower)
+
+{------------------- Commandos
+
+Dur Time --> Duraçao das atividades
+Durs [Time] --> Duraçoes das atividades em sequencia (finito)
+DursI [Time] --> Duraçoes das atividades em sequencia (infinito)
+DursN [(Name,Time)] --> Duraçoes finitas com nome das atividades (finito)
+DursNI [(Name,Time)] --> Duraçoes com nome das atividades (infinito)
+Cycle Int Time --> Cycle NumOfTimes in 1 Week
+Today --> Endpoint do projeto
+Init Instant --> Horario exato que a atividade deve começar
+End Instant --> Horario exato que a atividade deve começar
+Division [Time] [Interval] -->
+
+-------------------}
+
+-------------------- Recognition of Commands
+
+makeCommand :: (String, String) -> Command
+makeCommand (keyw,args) = case keyw of
+
+  "cycle" -> let (nt,time) = cycle args
+             in CycleC nt time
+
+  "dur"    -> DurationC    $ duration    args
+  "durs"   -> DurationsC   $ durations   args
+  "dursi"  -> DurationsiC  $ durationsi  args
+  "dursn"  -> DurationsnC  $ durationsn  args
+  "dursni" -> DurationsniC $ durationsni args
+
+  "duration"    -> DurationC    $ duration    args
+  "durations"   -> DurationsC   $ durations   args
+  "durationsi"  -> DurationsiC  $ durationsi  args
+  "durationsn"  -> DurationsnC  $ durationsn  args
+  "durationsni" -> DurationsniC $ durationsni args
+
+  "div"     -> DivisionC     $ division     args
+  "divn"    -> DivisionnC    $ divisionn    args
+  "divs"    -> DivisionsC    $ divisions    args
+  "divsi"   -> DivisionsiC   $ divisionsi   args
+  "divsn"   -> DivisionsnC   $ divisionsn   args
+  "divsni"  -> DivisionsniC  $ divisionsni  args
+  "divsnn"  -> DivisionsnnC  $ divisionsnn  args
+  "divsnni" -> DivisionsnniC $ divisionsnni args
+
+  "division"     -> DivisionC     $ division     args
+  "divisionn"    -> DivisionnC    $ divisionn    args
+  "divisions"    -> DivisionsC    $ divisions    args
+  "divisionsi"   -> DivisionsiC   $ divisionsi   args
+  "divisionsn"   -> DivisionsnC   $ divisionsn   args
+  "divisionsni"  -> DivisionsniC  $ divisionsni  args
+  "divisionsnn"  -> DivisionsnnC  $ divisionsnn  args
+  "divisionsnni" -> DivisionsnniC $ divisionsnni args
+
+  "today"    -> today args ? TodayC $ error "adsasdas"
+  "endpoint" -> EndpointC (endpoint args)
+
+  "totaltime"          ->
+    TotaltimeC (totaltime args)
+  "effectivetotaltime" ->
+    EffectiveTotaltimeC (effectivetotaltime args)
+
+  "notin"    -> NotinC    $ notin args
+  "in"       -> InC       $ notin args
+  "notbegin" -> NotbeginC $ notin args
+  "begin"    -> BeginC    $ notin args
+  "notend"   -> NotendC   $ notin args
+  "end"      -> EndC      $ notin args
+
+--  "init" -> InitC (init args)
+--  "end" -> EndC (end' args)
+--  "rightaftersleep" -> rightaftersleep args ?
+--                       RightaftersleepC $
+--                       error "sdgsdgsd"
+--  "rightbeforesleep" -> rightbeforesleep args ?
+--                        RightbeforesleepC $
+--                        error "kmlkjlkj"
+
+  "after" -> AfterC (after args)
+  "before" -> BeforeC (before args)
+  "rightafter" -> RightafterC (rightafter args)
+  "rightbefore" -> RightbeforeC (rightbefore args)
+
+--  "notin" -> NotinC (notin args)
+--  "in"    -> InC (notin args)
+
+  "at" -> AtC (at args)
+
+  "msg" -> MsgC (msg args)
+  "msgs" -> MsgsC (msgs args)
+  
+  txt -> error $ txt ++ " is not a valid command."
+
+recognizeCommand :: Parsed -> (Name, [Command])
+recognizeCommand (Parsed name keysAndArgs) =
+  (name, map makeCommand keysAndArgs)
+
+recognizeCommands :: [Parsed] -> [(Name, [Command])]
+recognizeCommands = map recognizeCommand
+
+-------------------- Argument Handlers
+
+cycle              = parseText cycleParser
+
+duration           = parseText durParser
+durations          = parseText dursParser
+durationsi         = parseText dursParser
+durationsn         = parseText dursnParser
+durationsni        = parseText dursnParser
+
+division           = parseText divisionParser
+divisionn          = parseText divisionnParser
+divisions          = parseText divisionsParser
+divisionsi         = parseText divisionsParser
+divisionsn         = parseText divisionsnParser
+divisionsni        = parseText divisionsnParser
+divisionsnn        = parseText divisionsnnParser
+divisionsnni       = parseText divisionsnnParser
+
+today              = withArgsMeansError
+endpoint           = instantParser -- parseText instantParserP
+
+totaltime          = parseText durParser
+effectivetotaltime = parseText durParser
+
+notin              = parseText notinParser
+in'                = undefined
+notbegin           = undefined
+begin              = undefined
+notend             = undefined
+end                = undefined
+
+--init               = initParser
+--end'               = init
+--rightaftersleep    = withArgsMeansError
+--rightbeforesleep   = withArgsMeansError
+
+after              = checkEmptyString "after" . noSpaces
+before             = checkEmptyString "before" . noSpaces
+rightafter         = checkEmptyString "rightafter" . noSpaces
+rightbefore        = checkEmptyString "rightbefore" . noSpaces
+
+at                 = checkEmptyString "at" . noSpaces
+
+msg                = substForNewLine .
+                     checkEmptyString "msg"
+                     . noSpaces
+msgs               = parseText msgsParser
+
+------------------- Parsers for Commands
+
+cycleParser :: Parser (Int, Dur)
+cycleParser = do
+  num <- many1 digit
+  spaces
+  string "in"
+  spaces
+  dur <- durParser
+  return (read num, dur)
+
+durParser :: Parser Dur
+durParser = do
+  dur <- choice [mons', mins', hours', days', weeks',
+                 mons_, mins_, hours_, days_, weeks_,
+                 mons,  mins,  hours,  days,  weeks]
+  (do char ':'
+      dur' <- durParser
+      return (Plus dur dur')) <|> return dur
+
+  where
+    
+    numberAndUnit :: String -> Parser Int
+    numberAndUnit s = read <$> do
+      num <- many digit
+      spaces
+      string s
+      case num of
+        "" -> error "No number given."
+        _  -> return num
+           
+    mons'  = Months  <$> try (numberAndUnit "months")
+    mins'  = Minutes <$> try (numberAndUnit "mins")
+    hours' = Hours   <$> try (numberAndUnit "hours")
+    days'  = Days    <$> try (numberAndUnit "days")
+    weeks' = Weeks   <$> try (numberAndUnit "weeks")
+    mons_  = Months  <$> try (numberAndUnit "month")
+    mins_  = Minutes <$> try (numberAndUnit "min")
+    hours_ = Hours   <$> try (numberAndUnit "hour")
+    days_  = Days    <$> try (numberAndUnit "day")
+    weeks_ = Weeks   <$> try (numberAndUnit "week")
+    mons   = Months  <$> try (numberAndUnit "mo")
+    mins   = Minutes <$> try (numberAndUnit "m")
+    hours  = Hours   <$> try (numberAndUnit "h")
+    days   = Days    <$> try (numberAndUnit "d")
+    weeks  = Weeks   <$> try (numberAndUnit "w")
+
+dursParser :: Parser [Dur]
+dursParser =
+  sepBy
+  (do dur <- durParser
+      spaces
+      return dur)
+  (char ',' >> spaces)
+
+dursnParser :: Parser [(String, Dur)]
+dursnParser = map (ifNoNameError "dursn") <$>
+  sepBy          
+  (do name <- many (noneOf ":,")
+      char ':'
+      spaces
+      dur <- durParser
+      spaces
+      return (noSpaces name,dur))
+  (char ',' >> spaces)
+
+divisionParser :: Parser [(Dur, Interval Dur)]
+divisionParser =
+  sepBy
+  (do dur <- durParser
+      spaces
+      char ','
+      spaces
+      int <- intervalDurParser
+      spaces
+      return (dur, int))
+  (char ',' >> spaces)
+
+divisionnParser :: Parser [(Name, Dur, Interval Dur)]
+divisionnParser = map (ifNoNameError2 "divisionn") <$>
+  sepBy
+  (do name <- many (noneOf ":,")
+      char ':'
+      spaces
+      dur <- durParser
+      spaces
+      char ','
+      spaces
+      int <- intervalDurParser
+      spaces
+      return (noSpaces name, dur, int))
+  (char ',' >> spaces)
+
+divisionsParser :: Parser [[(Dur, Interval Dur)]]
+divisionsParser =
+  sepBy
+  (do div <- divisionParser
+      spaces
+      return div)
+  (char ';' >> spaces)
+
+divisionsnParser :: Parser [[(String, Dur, Interval Dur)]]
+divisionsnParser =
+  sepBy
+  (do div <- divisionnParser
+      spaces
+      return div)
+  (char ';' >> spaces)
+
+divisionsnnParser ::
+  Parser [(String, [(String, Dur, Interval Dur)])]
+divisionsnnParser = map (ifNoNameError "divisionsnn") <$>
+  sepBy
+  (do nameStep <- many (noneOf ":,")
+      char ':'
+      spaces
+      ds <- divisionnParser
+      spaces
+      return (noSpaces nameStep,ds))
+  (char ';' >> spaces)
+
+{-initParser :: String -> Instant
+initParser s = case map toLower s of
+  't':'o':'d':'a':'y':' ':s' -> hourParser s'
+  _  -> instantParser s-}
+
+--- estoy aqui
+notinParser :: Parser [Interval Instant]
+notinParser =
+  liftParsecSepByComma
+  (\xs -> liftMaybe 
+          $ map
+          (parseTextMaybe
+           (do int <- intervalInstantParser
+               spaces
+               return int)) xs)
+  where
+    liftMaybe :: [Maybe a] -> Maybe [a]
+    liftMaybe xs = if isEmpty $ filter isNothing xs
+                   then Just $ map fromJust xs
+                   else Nothing
+
+    fromJust (Just x) = x
+
+    isNothing :: Maybe a -> Bool
+    isNothing (Just _) = False
+    isNothing Nothing  = True
+    
+    isEmpty :: [a] -> Bool
+    isEmpty [] = True
+    isEmpty _  = False
+
+msgsParser :: Parser [String]
+msgsParser =
+  map (checkEmptyString "msgs" .
+       substForNewLine .
+       noSpaces) <$>
+  sepBy
+  (do txt <- many (noneOf ";.")
+      spaces
+      return txt)
+  (char ';' >> spaces)
+
+-------------------- Parser Helpers
+
+hourParserMaybe :: String -> Maybe Instant
+hourParserMaybe txt  = case res of
+  Just rs -> Just rs
+  Nothing -> Nothing --error "Parsing Date Error."
+  where
+    res = hourMin4 ..:>
+          hourMin3 ..:>
+          hourMin2 ..:>
+          hourMin ..:>
+          hour txt
+    infixr ..:>
+    (..:>) :: (String -> Maybe a) -> Maybe a -> Maybe a
+    f ..:> s = case f txt of
+      Nothing -> s
+      just -> just
+
+hourParser :: String -> Instant
+hourParser = handleNothing . hourParserMaybe where
+  handleNothing may = case may of
+    Just rs -> rs
+    Nothing -> error "Parsing Date Error."
+
+instantParserP :: Parser Instant
+instantParserP =
+  choice [day', hourParser', dayMonth',
+          dayMonthYear', dayHour', dayMonthHour',
+          dayHourMin4', dayHourMin3', dayHourMin2', dayHourMin',
+          dayMonthHourMin', dayMonthYearHour',
+          dayMonthYearHourMin4', dayMonthYearHourMin3',
+          dayMonthYearHourMin2', dayMonthYearHourMin'] 
+  where day'                 = try $ liftParsec day
+        hourParser'          = try $ liftParsec hourParserMaybe
+        dayMonth'            = try $ liftParsec dayMonth
+        dayMonthYear'        = try $ liftParsec dayMonthYear
+        dayHour'             = try $ liftParsec dayHour
+        dayMonthHour'        = try $ liftParsec dayMonthHour
+        dayHourMin'          = try $ liftParsec dayHourMin
+        dayHourMin2'         = try $ liftParsec dayHourMin2
+        dayHourMin3'         = try $ liftParsec dayHourMin3
+        dayHourMin4'         = try $ liftParsec dayHourMin4
+        dayMonthHourMin'     = try $ liftParsec dayMonthHourMin
+        dayMonthYearHour'    = try $ liftParsec dayMonthYearHour
+        dayMonthYearHourMin' = try $ liftParsec dayMonthYearHourMin
+        dayMonthYearHourMin2'= try $ liftParsec dayMonthYearHourMin2
+        dayMonthYearHourMin3'= try $ liftParsec dayMonthYearHourMin3
+        dayMonthYearHourMin4'= try $ liftParsec dayMonthYearHourMin4
+
+instantParser :: String -> Instant
+instantParser txt  = case res of
+  Just rs -> rs
+  Nothing -> error "Parsing Date Error."
+  where
+    res = day ..:>
+          hourMin4 ..:>
+          hourMin3 ..:>
+          hourMin2 ..:>
+          hourMin ..:>
+          hour ..:>
+          dayMonth ..:>
+          dayMonthYear ..:>
+          dayHour ..:>
+          dayMonthHour ..:>
+          dayHourMin4 ..:>
+          dayHourMin3 ..:>
+          dayHourMin2 ..:>
+          dayHourMin ..:>
+          dayMonthHourMin ..:>
+          dayMonthYearHour ..:>
+          dayMonthYearHourMin4 ..:>
+          dayMonthYearHourMin3 ..:>
+          dayMonthYearHourMin2 ..:>
+          dayMonthYearHourMin txt
+    infixr ..:>
+    (..:>) :: (String -> Maybe a) -> Maybe a -> Maybe a
+    f ..:> s = case f txt of
+      Nothing -> s
+      just -> just
+
+intervalDurParser :: Parser (Interval Dur)
+intervalDurParser = choice [none, interval, orMore, exact]
+  where none = try (string "none" >> return NoInterval)
+        interval = try $ do
+          from <- durParser
+          spaces >> char '-' >> spaces
+          to <- durParser
+          return $ FromTo from to
+        orMore = try $ do
+          dur <- durParser
+          spaces
+          char '+'
+          return $ OrMore dur
+        exact = try (Exact <$> durParser)
+
+intervalInstantParser :: Parser (Interval Instant)
+intervalInstantParser = choice [none, interval, orMore, exact]
+  where none = try (string "none" >> return NoInterval)
+        interval = try $ do
+          from <- many $ noneOf ",.+-" --instantParserP
+          spaces >> char '-' >> spaces
+          to <- many $ noneOf ",."
+          let from' = parseText instantParserP from
+              to'   = parseText instantParserP to
+          return $ FromTo from' to'
+        orMore = try $ do
+          dur <- many $ noneOf ",.+-" -- instantParserP
+          spaces
+          char '+'
+          let dur' = parseText instantParserP dur
+          return $ OrMore dur'
+        exact = try (Exact <$> instantParserP)
+{-
+intervalInstantParser :: Parser SpecialNameOrInterval
+intervalInstantParser =
+  (Special <$> try specialParser)
+  <|> (Instant <*> intervalInstantParser)
+  where specialParser :: Parser Name
+        specialParser =
+            str "monday"
+        <|> str "asd"
+        <|> str "asda"
+
+        str = try . string
+-}        
+
+-------- Parsing Date Format Functions
+
+day :: String -> Maybe Instant
+day = propagMaybe PutYearAndMonth (parseDate "%d")
+
+dayMonth :: String -> Maybe Instant
+dayMonth = propagMaybe PutYear (parseDate "%d/%m")
+
+dayMonthYear :: String -> Maybe Instant
+dayMonthYear = propagMaybe CompleteTime (parseDate "%d/%m/%y")
+
+dayHour :: String -> Maybe Instant
+dayHour = propagMaybe PutYearAndMonth (parseDate "%d %_Hh")
+
+dayMonthHour :: String -> Maybe Instant
+dayMonthHour = propagMaybe PutYear (parseDate "%d/%m %_Hh")
+
+dayHourMin :: String -> Maybe Instant
+dayHourMin = propagMaybe PutYearAndMonth (parseDate "%d %_H:%M")
+
+dayHourMin2 :: String -> Maybe Instant
+dayHourMin2 = propagMaybe PutYearAndMonth (parseDate "%d %_Hh:%M")
+
+dayHourMin3 :: String -> Maybe Instant
+dayHourMin3 = propagMaybe PutYearAndMonth (parseDate "%d %_H:%Mm")
+
+dayHourMin4 :: String -> Maybe Instant
+dayHourMin4 = propagMaybe PutYearAndMonth (parseDate "%d %_Hh:%Mm")
+
+dayMonthHourMin :: String -> Maybe Instant
+dayMonthHourMin = propagMaybe PutYear (parseDate "%d/%m %_H:%M")
+
+dayMonthYearHour :: String -> Maybe Instant
+dayMonthYearHour =
+  propagMaybe CompleteTime (parseDate "%d/%m/%Y %_Hh")
+
+dayMonthYearHourMin :: String -> Maybe Instant
+dayMonthYearHourMin =
+  propagMaybe CompleteTime (parseDate "%d/%m/%Y %_H:%M")
+  
+dayMonthYearHourMin2 :: String -> Maybe Instant
+dayMonthYearHourMin2 =
+  propagMaybe CompleteTime (parseDate "%d/%m/%Y %_Hh:%M")
+  
+dayMonthYearHourMin3 :: String -> Maybe Instant
+dayMonthYearHourMin3 =
+  propagMaybe CompleteTime (parseDate "%d/%m/%Y %_H:%Mm")
+  
+dayMonthYearHourMin4 :: String -> Maybe Instant
+dayMonthYearHourMin4 =
+  propagMaybe CompleteTime (parseDate "%d/%m/%Y %_Hh:%Mm")
+
+hour :: String -> Maybe Instant
+hour = propagMaybe PutToday (parseDate "%_Hh")
+
+hourMin :: String -> Maybe Instant
+hourMin = propagMaybe PutToday (parseDate "%_H:%M")
+
+hourMin2 :: String -> Maybe Instant
+hourMin2 = propagMaybe PutToday (parseDate "%_Hh:%M")
+
+hourMin3 :: String -> Maybe Instant
+hourMin3 = propagMaybe PutToday (parseDate "%_H:%Mm")
+
+hourMin4 :: String -> Maybe Instant
+hourMin4 = propagMaybe PutToday (parseDate "%_Hh:%Mm")
+
+propagMaybe :: (ZonedTime -> Instant)
+            -> (String -> Maybe ZonedTime)
+            ->  String -> Maybe Instant
+propagMaybe p parse txt = case parse txt of
+  Nothing -> Nothing
+  Just ju -> Just $ p ju
+
+substForNewLine :: String -> String
+substForNewLine = map subst
+  where subst '\\' = '\n'
+        subst s = s
+
+-------- Parser Lifters
+        
+liftParsec :: (String -> Maybe a) -> Parser a
+liftParsec f = do
+  txt <- many $ noneOf ",."
+  let res = f txt
+  case res of
+    Nothing -> fail "Fail with liftParsec."
+    Just rs -> return rs
+
+liftParsecSepByComma :: ([String] -> Maybe a) -> Parser a
+liftParsecSepByComma f = do
+  txts <- sepBy (spaces >> many (noneOf ",.")) (char ',' >> spaces)
+  let res = f txts
+  case res of
+    Nothing -> fail "Fail with liftParsecSepByComma."
+    Just rs -> return rs
+
+-------- Helpers
+
+checkEmptyString :: String -> String -> String
+checkEmptyString cmd "" =
+  error "Empty text in command " ++ cmd ++ "."
+checkEmptyString _ s = s
+
+ifNoNameError :: Show a => String -> (String,a) -> (String,a)
+ifNoNameError cmd ("",a) =
+  error $ "No name in command " ++ cmd ++ " (" ++ show a ++ ")."
+ifNoNameError _ t = t
+
+ifNoNameError2 :: (Show a, Show b) =>
+                  String -> (String,a,b) -> (String,a,b)
+ifNoNameError2 cmd ("",a,b) =
+  error $ "No name in command " ++ cmd ++ show (a,b) ++ "."
+ifNoNameError2 _ t = t
+
+withArgsMeansError :: String -> Bool
+withArgsMeansError "" = True
+withArgsMeansError _  = False
+
+parseDate :: String -> String -> Maybe ZonedTime
+parseDate = parseTimeM True timeLocale
+  where timeLocale = defaultTimeLocale {
+          dateFmt = "%d/%m/%y",
+          knownTimeZones = [TimeZone (-120) True "BRST"]
+          }
+                     
+(?) :: Bool -> a -> a -> a
+True  ? a = \_ -> a
+False ? _ = \b -> b
+
