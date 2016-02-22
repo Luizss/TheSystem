@@ -7,6 +7,9 @@ module Project where
 import Data
 import Data.List hiding (cycle)
 import Data.Time hiding (toGregorian, fromGregorian)
+import qualified Data.Time.Calendar as C
+import Data.Time.Calendar.WeekDate
+import qualified Data.DateTime as D
 import Data.DateTime hiding (getCurrentTime)
 
 -------------------- Command And Project Type
@@ -122,27 +125,6 @@ checkProjectTypeErrors cs pType =
     fromBoolToOkErr True  = Ok
     fromBoolToOkErr False =
       Err "Duplicated cycle, duration, endpoint or totaltime"
-
-{-checkRest :: [CommandType] -> OkErr
-checkRest = hasMoreThanOne [ICons,PlaceT,MsgT]
-  where
-    hasMoreThanOne :: [CommandType] -> [CommandType] -> OkErr
-    hasMoreThanOne rest = fromBoolToOkErr
-                          . and
-                          . map (hasMoreThanOne' rest)    
-
-    hasMoreThanOne' :: [CommandType] -> CommandType -> Bool
-    hasMoreThanOne' rest cType =
-      (> 2) $ sum $ map (boolToNum . (== cType)) rest
-
-    boolToNum :: Bool -> Int
-    boolToNum True  = 1
-    boolToNum False = 0
-    
-    fromBoolToOkErr :: Bool -> OkErr
-    fromBoolToOkErr True  = Ok
-    fromBoolToOkErr False =
-      Err "Duplicated interval contraint, place or message."-}
 
 projectTypeHandlingErrors :: [Command] -> ProjectType
 projectTypeHandlingErrors cs =
@@ -353,6 +335,156 @@ rest comms =
   <*> return (constr comms)
   <*> return (costs  comms)
 
+------------------------- Working Area
+
+-- Checar se as funçoes de tempo com ZonedTime realmente mostram o zonedtime certo
+
+--- Fazer as funçoes gregorian para zonedtime
+
+getZone :: IO (TimeZone, Minutes)
+getZone = do
+  ZonedTime _ timeZone@(TimeZone mins _ _) <- getZonedTime
+  return (timeZone, fromIntegral mins)
+
+weekday y mo d = do
+  ZonedTime _ timeZone@(TimeZone mins _ _) <- getZonedTime
+  print =<< fromGregToZonedIO y mo d 0 0
+  return
+    $ toWeekDate
+    $ C.fromGregorian y mo d
+
+fromGregToZoned
+  :: TimeZone -> Minutes
+  -> Integer -> Int -> Int -> Int -> Int -> ZonedTime
+fromGregToZoned timeZone offset y mo d h m =
+    utcToZonedTime timeZone
+    $ fromGregorian y mo d h (m-offset) 0
+
+fromGregToZonedIO
+  :: Integer -> Int -> Int -> Int -> Int -> IO ZonedTime
+fromGregToZonedIO y mo d h m = do
+  (timeZone,offset) <- getZone
+  return $ fromGregToZoned timeZone offset y mo d h m
+
+fromZonedToGreg :: ZonedTime -> (Integer, Int, Int, Int, Int,Int)
+fromZonedToGreg time@(ZonedTime _ timeZone@(TimeZone mins _ _)) =
+  toGregorian $ addMinutes (fromIntegral mins) (zonedTimeToUTC time)
+
+--type Head = Interval ZonedTime
+type Minutes = Int
+type Hours = Integer
+
+minimumIntervalDuration :: Minutes
+minimumIntervalDuration = 6 * 60
+
+makeIntervals
+  :: (ZonedTime -> Bool)
+  -> Dur -- Duration of Intervals
+  -> Dur -- Period between Intervals
+  -> IO [Interval ZonedTime]
+makeIntervals isIn dur per = do
+  now <- getZonedTime
+
+  let
+    
+    head = FromTo now seed
+    
+    seed = case isIn now of
+      True  -> getSeedAfterTrue now
+      False -> getSeed now
+
+    rest = makeRestFromSeed seed
+    
+  return $ glueHeadWithRest head rest
+  where
+    
+    durMin = durToMinutes dur
+    
+    getSeed :: ZonedTime -> ZonedTime
+    getSeed now =
+      let next = addTime durMin now
+      in case isIn next of
+        True  -> roundAtBegginingOfInterval now
+        False -> getSeed next
+
+    getSeedAfterTrue :: ZonedTime -> ZonedTime
+    getSeedAfterTrue now =
+      let next = addTime durMin now 
+      in case isIn next of
+        True  -> getSeedAfterTrue next
+        False -> getSeed next
+
+    addTime :: Minutes -> ZonedTime -> ZonedTime
+    addTime amount date@(ZonedTime _ timeZone) =
+      utcToZonedTime timeZone
+      $ addMinutes (fromIntegral amount)
+      $ zonedTimeToUTC date
+      
+    roundAtBegginingOfInterval :: ZonedTime -> ZonedTime
+    roundAtBegginingOfInterval = case dur of   
+      Hours  6 -> roundAt6Hours
+      Days   1 -> roundAtDay 
+      Weeks  1 -> roundAtWeek
+      Months 1 -> roundAtMonth
+
+    roundAt6Hours :: ZonedTime -> ZonedTime
+    roundAt6Hours time@(ZonedTime _ timeZone@(TimeZone mins _ _)) =
+      let (y,mo,d,h,_,_) =
+            toGregorian
+            $ addMinutes
+            (-(fromIntegral mins))
+            (zonedTimeToUTC time)
+          rounded :: Int
+          rounded
+            | h >= 0  && h < 6   = 0
+            | h >= 6  && h < 12  = 6 
+            | h >= 12 && h < 18  = 12
+            | h >= 18 && h <= 23 = 18
+      in utcToZonedTime timeZone
+         $ fromGregorian y mo d rounded mins 0
+
+    -- TODO 1
+    roundAtDay = undefined
+    roundAtWeek = undefined
+    roundAtMonth = undefined
+
+    -- TODO 2
+    makeRestFromSeed :: ZonedTime -> [Interval ZonedTime]
+    makeRestFromSeed z = undefined
+
+    -- TODO 3
+    glueHeadWithRest = undefined
+
+{-roundAt6Hours :: ZonedTime -> ZonedTime
+roundAt6Hours time@(ZonedTime _ timeZone@(TimeZone mins _ _)) =
+  let utc = zonedTimeToUTC time
+      offset = -(fromIntegral mins)
+      (y,mo,d,h,_,_) = toGregorian $ addMinutes offset utc
+      rounded :: Int
+      rounded
+        | h >= 0  && h < 6   = 0
+        | h >= 6  && h < 12  = 6 
+        | h >= 12 && h < 18  = 12
+        | h >= 18 && h <= 23 = 18
+  in utcToZonedTime timeZone
+     $ fromGregorian y mo d rounded mins 0-}
+
+roundAt6Hours :: ZonedTime -> ZonedTime
+roundAt6Hours time@(ZonedTime _ timeZone@(TimeZone mins _ _)) =
+  let (y,mo,d,h,_,_) = fromZonedToGreg time
+      rounded
+        | h >= 0  && h < 6   = 0
+        | h >= 6  && h < 12  = 6 
+        | h >= 12 && h < 18  = 12
+        | h >= 18 && h <= 23 = 18
+  in fromGregToZoned timeZone mins y mo d rounded 0
+     
+{-test h m = do
+  (zone,mins) <- getZone
+  return
+    $ roundAt6Hours
+    $ utcToZonedTime zone $ fromGregorian 1 1 1 h (m-mins) 0-}
+    
 intervalConstraint :: [Command] -> IO (Maybe IntervalConstraint)
 intervalConstraint = iCons . filter ((== ICons) . commandType)
   where
@@ -369,47 +501,63 @@ intervalConstraint = iCons . filter ((== ICons) . commandType)
       NotendC   spec -> Notend   <$> fromSpecialToNonSpecial spec
       EndC      spec -> End      <$> fromSpecialToNonSpecial spec
 
+    isMorning = undefined
+    
     fromSpecialToNonSpecial ::
       SpecialInterval -> IO [Interval ZonedTime]
-    fromSpecialToNonSpecial spec = undefined
+    fromSpecialToNonSpecial spec = case spec of
+      
+      Morning    -> makeIntervals isMorning (Hours 6) (Days 1)
+      Afternoon  -> undefined
+      Evening    -> undefined
+      Night      -> undefined
     
-{-case spec of
-  Morning -> 
-  Afternoon
-  Evening
-  Night
-    
-  Sunday
-  Monday
-  Tuesday
-  Wednesday
-  Thursday
-  Friday
-  Saturday
+      Sunday     -> undefined
+      Monday     -> undefined
+      Tuesday    -> undefined
+      Wednesday  -> undefined
+      Thursday   -> undefined
+      Friday     -> undefined
+      Saturday   -> undefined
 
-  FirstWeek
-  SecondWeek
-  ThirdWeek
-  FourthWeek
+      FirstWeek  -> undefined
+      SecondWeek -> undefined
+      ThirdWeek  -> undefined
+      FourthWeek -> undefined
 
-  January
-  February
-  March
-  April
-  May
-  June
-  July
-  August
-  September
-  October
-  November
-  December
+      January    -> undefined
+      February   -> undefined
+      March      -> undefined
+      April      -> undefined
+      May        -> undefined
+      June       -> undefined
+      July       -> undefined
+      August     -> undefined
+      September  -> undefined
+      October    -> undefined
+      November   -> undefined
+      December   -> undefined
 
-  Interval (Interval Instant)
+      Interval i -> undefined
 
-  And SpecialInterval SpecialInterval
-  Or SpecialInterval SpecialInterval-}
+      And s1 s2  -> undefined
+      Or  s1 s2  -> undefined
 
+{-nextDateWithConstraint :: (ZonedTime -> Bool) -> Dur -> IO (Head, ZonedTime)
+nextDateWithConstraint constr plusTime = do
+  ZonedTime _ timeZone@(TimeZone mins _ _) <- getZonedTime
+  date <- getCurrentTime
+  case constr date of
+    True  -> date
+    False -> nextDateWithConstraint constr plusTime
+             $ nextTime plusTime date
+  where nextTime dur date = case dur of
+          Hours h' ->
+            let (y,mo,d,h,m,s) = D.toGregorian date
+            in fromGregorian (y,mo,d,h,m+m',s)-}
+
+---------------------------------
+      
 place :: [Command] -> Maybe Place
 place = place' . filter ((== PlaceT) . commandType)
   where
@@ -553,11 +701,27 @@ today = do
     $ fromGregorian y m (d+1) 0 (-mins) 0
 
 durToSeconds :: Dur -> Seconds
-durToSeconds (Minutes  m) = m*60
-durToSeconds (Hours    h) = h*3600
-durToSeconds (Days     d) = d*86400
-durToSeconds (Weeks    w) = w*604800
-durToSeconds (Months  mo) = mo*18144000
+durToSeconds dur = case dur of
+  Minutes  m -> m*60
+  Hours    h -> h*3600
+  Days     d -> d*86400
+  Weeks    w -> w*604800
+  Months  mo -> mo*18144000
+
+{-durToSeconds :: Dur -> Seconds
+  Minutes  m -> m*60
+  Hours    h -> h*3600
+  Days     d -> d*86400
+  Weeks    w -> w*604800
+  Months  mo -> mo*18144000-}
+
+durToMinutes :: Dur -> Minutes
+durToMinutes dur = case dur of
+  Minutes  m -> m
+  Hours    h -> h*60
+  Days     d -> d*1440
+  Weeks    w -> w*10080
+  Months  mo -> mo*302400
 
 fromInstantToInitialTime :: Instant -> IO ZonedTime
 fromInstantToInitialTime inst = case inst of
@@ -589,6 +753,9 @@ putDayInitial z = do
   return
     $ utcToZonedTime timeZone
     $ fromGregorian 1 1 1 h (m-mins) s
+
+----------------------- Helpers
+
 
 {----- TODO
 
