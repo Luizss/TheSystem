@@ -2,12 +2,21 @@
 ** Arquivo para erros
 ** Arquivo Helper - Necessario?
 ** Fazer Comandos do tipo Costs
-** Comandos do tipo 'notins' poderao parsear instantes ou palavras especiais como "thrusday" e etc
+** DONE Comandos do tipo 'notins' poderao parsear instantes ou palavras especiais como "thrusday" e etc
 ** DONE Porque instant parser nao aceita hourMin? - Command.hs
    Analisar o caso: agora aceita.
 ** DONE Testar todos instant parsers (Parser e String -> ...)
 ** DONE Init e Endpoint usam instantParser. Poderia ser substituido por parseText instantParserP?
-** Lembrete: Para o campo 'Dur' que define o tempo entre tarefas em divisions, 1 day pode nao significa 24 horas e sim apos o termino do dia.
+** DONE Lembrete: Para o campo 'Dur' que define o tempo entre tarefas em divisions, 1 day pode nao significa 24 horas e sim apos o termino do dia.
+** DONE Todos e ideias a respeito de fromSpecialToNonSpecial
+*** funçao dropUntilPresent para que a lista nao fique gigante
+*** dropUntilPresent deve ser eficiente
+*** Nao necessario pois a lista começa do presente
+** Problema com interval constraints
+*** Nao se sabe o que fazer quando os intervalos sao indefinidos
+*** Sabe-se que para specialwords apenas a funçao mergeIntervals funciona pois os casos indefinidos ocorrem apenas no inicio
+*** Quando mergeintervals e usado com Interval os casos na maioria das vezes sao indefinidos e a funcao atual nao funciona
+*** Para Interval, o certo seria definir o intervalo como True e todo o resto como False, para specialwords nao
 * O que esta decidido
 ** Sleeping sera um projeto normal com prioridade maxima no algoritmo
 ** Sleeping_penalty e o projeto que substitui Sleeping em um caso de saturaçao. Isso pode ocorrer tambem para qualquer outro projeto.
