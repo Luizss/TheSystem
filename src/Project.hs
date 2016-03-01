@@ -1,7 +1,11 @@
 module Project where
 
-import System.Directory
+--import System.Directory
 import Data
+import ProjectS
+
+import Data.Time
+import Data.Time.Clock
 
 getState :: IO [(Name,State)] -- [(Name, State)]
 getState = do
@@ -18,7 +22,9 @@ getState = do
       writeFile stateFile (show state)
       putStrLn "State Initialized."
       return state
-  
+
+doesFileExist = undefined
+{-  
 -- funcao feia (bem feia)
 mergeStates
   :: [(Name, State)] -> [(Name, ProjectS)] -> [(Name, ProjectS)]
@@ -82,7 +88,7 @@ mergeStates states projs = case states of
     stepsDone _ Nothing = Unfinished Nothing
     stepsDone (Just (StepsDone 0)) jd = Unfinished jd
     stepsDone n (Just (DurationInfS d)) =
-      stepsDone n (Just (DurationS (cycle d)))
+      stepsDone n (Just (DurationS (cycle d))) -- errado
     stepsDone (Just (StepsDone n)) (Just (DurationS d)) = case d of
       [] -> Finished
       (name,dds) : xs
@@ -122,9 +128,10 @@ mergeStates states projs = case states of
       | tot - timeS <= 0 = Finished
       | otherwise        =
         Unfinished $ Just $ EffectiveTotaltime $ tot - timeS
+-}
 
 
-----------------------------------------
+{-----------------------------------------
 -- teste da funçao mergeStates
 teste = mergeStates
   [("itsme", State Nothing (Just (TimeSpent 5)))
@@ -149,7 +156,7 @@ teste = mergeStates
              restNo)
   ,("itsme", ProjectS Nothing Nothing Nothing (Just (Totaltime 6)) restNo)] where
     restNo = RestS Nothing Nothing Nothing [] []
-------------------------------------
+------------------------------------}
 
 {-makeProject :: [(Name,ProjectS)] -> State -> ProjectS
 makeProject proj state = undefined
@@ -176,9 +183,14 @@ mergeS projs may = case maybe of
     stepsDone n d = drop n d
     timeSpent x t = t - x-}
 
-infer :: (ProjectType, ProjectS) -> ProjectS
-infer pType (Project c d e t r) = case pType of
-  CD    -> let c' = 
+infer :: ProjectType -> ProjectS -> IO ProjectS
+infer pType (ProjectS c d e t r) = case pType of
+  CD    -> do
+    let c' = stdCycle c
+        d' = stdDur d
+        k  = length d'
+    e <- inferEndpoint c' k
+    return $ ProjectS c d (Just e) (Just (inferTotaltime d')) r
   CD'   -> asdasd
   DE    -> asdasd
   CE    -> asdasd
@@ -193,3 +205,45 @@ infer pType (Project c d e t r) = case pType of
   D'ET  -> asdasd
   CDET  -> asdasd
   CD'ET -> asdasd
+
+inferEndpoint :: Double -> Int -> IO Endpoint
+inferEndpoint c k = do
+  now <- getCurrentTime
+  let timeLeft = (fromIntegral k) / c
+      a = fromRational (toRational ((floor timeLeft) * 60)) :: NominalDiffTime
+      end = addUTCTime a now
+  endp <- utcToLocalZonedTime end
+  return $ Endpoint endp
+      
+
+inferTotaltime = Totaltime . sum
+
+type TimesPerMinutes = Double
+
+stdCycle :: Maybe CycleS -> TimesPerMinutes
+stdCycle (Just (CycleS times mins)) = fromIntegral times / fromIntegral mins
+
+--- ? Sum ?
+stdDur :: Maybe DurationS -> [Minutes] --[[Minutes]]
+stdDur (Just (DurationS lst))
+  = map
+  ( sum . map durToMinutes . takeDurations)
+  lst
+  where takeDurations (_,l) = map (\(_,d,_) -> d) l
+
+stdEndpoint :: Maybe Endpoint -> IO Minutes
+stdEndpoint (Just (Endpoint end)) = do
+  now <- getCurrentTime
+  let a = ceiling ((diffUTCTime (zonedTimeToUTC end) now) / 60) :: Minutes
+  return a
+  
+asdasd = undefined
+
+ts = stdDur (Just (DurationS
+               [
+                 (
+                   Nothing,
+                   [(Nothing,Hours 3, NoInterval),
+                    (Nothing,Months 3, NoInterval)]
+                )
+               ]))
