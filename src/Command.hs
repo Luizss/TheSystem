@@ -261,10 +261,23 @@ exprParser = do
     term :: Parser SpecialInterval
     term =
       choice
-      [ try $ string "morning"    >> return Morning
-      , try $ string "afternoon"  >> return Afternoon
+      [ try $ string "dawns"      >> return Dawn
+      , try $ string "mornings"   >> return Morning
+      , try $ string "evenings"   >> return Evening
+      , try $ string "nights"     >> return Night
+
+      , try $ string "dawn"       >> return Dawn
+      , try $ string "morning"    >> return Morning
       , try $ string "evening"    >> return Evening
       , try $ string "night"      >> return Night
+
+      , try $ string "sundays"    >> return Sunday
+      , try $ string "mondays"    >> return Monday
+      , try $ string "tuesdays"   >> return Tuesday
+      , try $ string "wednesdays" >> return Wednesday
+      , try $ string "thursdays"  >> return Thursday
+      , try $ string "fridays"    >> return Friday
+      , try $ string "saturdays"  >> return Saturday
         
       , try $ string "sunday"     >> return Sunday
       , try $ string "monday"     >> return Monday
@@ -274,10 +287,10 @@ exprParser = do
       , try $ string "friday"     >> return Friday
       , try $ string "saturday"   >> return Saturday
         
-      , try $ string "firstweek"  >> return FirstWeek
-      , try $ string "secondweek" >> return SecondWeek
-      , try $ string "thirdweek"  >> return ThirdWeek
-      , try $ string "fourthweek" >> return FourthWeek
+--      , try $ string "firstweek"  >> return FirstWeek
+--      , try $ string "secondweek" >> return SecondWeek
+--      , try $ string "thirdweek"  >> return ThirdWeek
+--      , try $ string "fourthweek" >> return FourthWeek
         
       , try $ string "january"    >> return January
       , try $ string "february"   >> return February
@@ -300,7 +313,7 @@ exprParser = do
                  return e
         
       , many (noneOf "") >>=
-        (\a -> error $ "Error in function 'term': " ++ a)]
+        (\a -> error $ "Parsing Error in function 'term': " ++ a)]
 
 msgsParser :: Parser [String]
 msgsParser =

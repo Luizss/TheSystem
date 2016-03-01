@@ -2,7 +2,7 @@ module Data where
 
 ----------------- Imports
 
-import Text.Parsec
+import Text.Parsec hiding (State)
 import Data.Time
 
 ----------------- Parser
@@ -20,51 +20,34 @@ data Parsed =
 
 ----------------- Command
 
-instance Eq ZonedTime where
-  ZonedTime t (TimeZone _ _ n) ==
-    ZonedTime t' (TimeZone _ _ n') =
-    t == t' &&  n == n'
+data Interval t
+  = FromTo { from :: t, to :: t }
+  | OrMore t
+  | Exact t
+  | NoInterval
+  deriving (Show, Read, Eq)
 
--- when time is not sure
-data Interval t = FromTo { from :: t, to :: t }
-                | OrMore t
-                | Exact t
-                | NoInterval
-                deriving (Show, Read, Eq)
+data Dur
+  = Minutes Int
+  | Hours Int
+  | Days Int
+  | Weeks Int
+  | Months Int
+  | Plus Dur Dur
+  deriving (Show, Read, Eq)
 
-data Dur = Minutes Int
-         | Hours Int
-         | Days Int
-         | Weeks Int
-         | Months Int
-         | Plus Dur Dur
-         deriving (Show, Read, Eq)
+data Instant
+  = PutYearAndMonth ZonedTime
+  | PutYear ZonedTime
+  | PutToday ZonedTime
+  | CompleteTime ZonedTime
+  deriving (Show, Read, Eq)
 
-data Instant = PutYearAndMonth ZonedTime
-             | PutYear ZonedTime
-             | PutToday ZonedTime
-             | CompleteTime ZonedTime
-             deriving (Show, Read, Eq)
-
-{-Morning     5 am to 12 pm (noon)
-Early morning    5 to 8 am
-Late morning     11 am to 12pm
- 
-Afternoon     12 pm to 5 pm
-Early afternoon   1 to 3pm
-Late afternoon    4 to 5pm
- 
-Evening     5 pm to 9 pm
-Early evening   5 to 7 pm
-
-Night         9 pm to 4 am-}
-
-data SpecialInterval =
-  
-    Morning
-  | Afternoon
-  | Evening
-  | Night
+data SpecialInterval
+  = Dawn    -- 00 - 05:59
+  | Morning -- 06 - 11:59
+  | Evening -- 12 - 17:59
+  | Night   -- 18 - 23:59
     
   | Sunday
   | Monday
@@ -73,11 +56,6 @@ data SpecialInterval =
   | Thursday
   | Friday
   | Saturday
-
-  | FirstWeek
-  | SecondWeek
-  | ThirdWeek
-  | FourthWeek
 
   | January
   | February
@@ -93,6 +71,7 @@ data SpecialInterval =
   | December
 
   | Interval (Interval Instant)
+  | Complete (Interval ZonedTime)
 
   | And SpecialInterval SpecialInterval
   | Or SpecialInterval SpecialInterval
@@ -143,14 +122,34 @@ data Command
 
   -- Messages
   | MsgC String
-  | MsgsC [String]
-    
+  | MsgsC [String]    
   deriving (Show,Read,Eq)
 
------------------ Project
+-- Instances
 
-data CommandType =
-    C      -- CycleType
+instance Eq ZonedTime where
+  ZonedTime t (TimeZone _ _ n) ==
+    ZonedTime t' (TimeZone _ _ n') =
+    t == t' && n == n'
+
+instance Functor Interval where
+  fmap f int = case int of
+    FromTo from to -> FromTo (f from) (f to)
+    OrMore t       -> OrMore (f t)
+    Exact  t       -> Exact  (f t)
+    NoInterval     -> NoInterval
+
+----------------- ProjectS
+
+data OkErr = Ok | Err String
+
+-- Year, Month, Day, Hour, Minute, Second
+type Gregorian = (Integer,Int,Int,Int,Int,Int)
+
+type Minutes = Int
+
+data CommandType
+  = C      -- CycleType
   | D      -- DurationType
   | D'     -- Infinite DurationType
   | E      -- EndpointType 
@@ -162,8 +161,8 @@ data CommandType =
   | CosT   -- CostsType
   deriving (Show,Read,Ord,Eq)
 
-data ProjectType =
-    CD
+data ProjectType
+  = CD
   | CD'
   | DE
   | CE
@@ -180,81 +179,114 @@ data ProjectType =
   | CD'ET
   deriving (Show, Read, Eq)
 
-data OkErr = Ok | Err String
-
-data Project =
-  Project
-  (Maybe Cycle)
-  (Maybe Duration)
-  (Maybe Endpoint)
-  (Maybe Totaltime)
-  Rest
+data ProjectS
+  = ProjectS
+    (Maybe CycleS)
+    (Maybe DurationS)
+    (Maybe Endpoint)
+    (Maybe Totaltime)
+    RestS
   deriving (Show, Read, Eq)
 
-data Rest =
-  Rest
-  (Maybe IntervalConstraint)
-  (Maybe Place)
-  (Maybe Messg)
-  [Constraint]
-  [Cost]
-  deriving (Show, Read, Eq)
-             
-type Seconds = Int -- ou Int
-
---------
-
-data Cycle =
-  Cycle Int Seconds
+data RestS
+  = RestS
+    (Maybe IntervalConstraintS)
+    (Maybe Place)
+    (Maybe Messg)
+    [Constraint]
+    [Cost]
   deriving (Show, Read, Eq)
 
-data Duration =
-  Duration [(Maybe Name, [(Maybe Name, Dur, Interval Dur)])]
+data CycleS
+  = CycleS Int Minutes
+  deriving (Show, Read, Eq)
+
+data DurationS
+  = DurationS    [(Maybe Name, [(Maybe Name, Dur, Interval Dur)])]
+  | DurationInfS [(Maybe Name, [(Maybe Name, Dur, Interval Dur)])]
   deriving (Show,Read,Eq)
 
-data Endpoint =
-  Endpoint ZonedTime
+data Endpoint
+  = Endpoint ZonedTime
   deriving (Show, Read, Eq)
 
-data Totaltime = Totaltime Seconds
-               | EffectiveTotaltime Seconds
+data Totaltime
+  = Totaltime Minutes
+  | EffectiveTotaltime Minutes
+  deriving (Show, Read, Eq)
+
+type InOrOut a = (Bool,a)
+
+data IntervalConstraintS
+  = NotinS    SpecialInterval
+  | InS       SpecialInterval
+  | NotbeginS SpecialInterval
+  | BeginS    SpecialInterval
+  | NotendS   SpecialInterval
+  | EndS      SpecialInterval
+  deriving (Show, Read, Eq)
+           
+{-data IntervalConstraint
+  = Notin    [InOrOut (Interval ZonedTime)]
+  | In       [InOrOut (Interval ZonedTime)]
+  | Notbegin [InOrOut (Interval ZonedTime)]
+  | Begin    [InOrOut (Interval ZonedTime)]
+  | Notend   [InOrOut (Interval ZonedTime)]
+  | End      [InOrOut (Interval ZonedTime)]
+  deriving (Show, Read, Eq)-}
+
+data Constraint
+  = After Name
+  | Before Name
+  | RightAfter Name
+  | RightBefore Name
+  deriving (Show,Read,Eq)
+
+data Place
+  = At String
+  deriving (Show,Read,Eq)
+
+data Messg
+  = Msgs [String]
+  | Msg String
+  deriving (Show,Read,Eq)
+
+data Cost
+  = Cst -- Fazer mais costs
+  deriving (Show,Read,Eq)
+
+instance Ord ZonedTime where
+  ZonedTime time _ <= ZonedTime time' _
+    = time <= time'
+
+----------------- State And Project
+
+newtype StepsDone
+  = StepsDone Int
+  deriving (Show, Read, Eq)
+           
+newtype TimeSpent
+  = TimeSpent Minutes
+  deriving (Show, Read, Eq)
+
+data State
+  = State (Maybe StepsDone) (Maybe TimeSpent)
+  deriving (Show, Read, Eq)
+
+data IsFinished x
+  = Finished | Unfinished x
+  deriving (Show, Read, Eq)
+
+{-
+type State = State [(Name, StateType)]
+
+data StateType = StepsDone Int
+               | TimeSpent Minutes
+               | Both Int Minutes
                deriving (Show, Read, Eq)
+-}
 
-newtype AddOns = AddOns [AddOn] deriving (Show, Read, Eq)
-
-data AddOn = IntervalConstraint IntervalConstraint
-           | Constraint Constraint
-           | Place Place
-           | Messg Messg
-           | Cost Cost
-           deriving (Show, Read, Eq)
-
-data IntervalConstraint = Notin    [Interval ZonedTime]
-                        | In       [Interval ZonedTime]
-                        | Notbegin [Interval ZonedTime]
-                        | Begin    [Interval ZonedTime]
-                        | Notend   [Interval ZonedTime]
-                        | End      [Interval ZonedTime]
-                        deriving (Show, Read, Eq)
-
-data Constraint = After Name
-                | Before Name
-                | RightAfter Name
-                | RightBefore Name
-                deriving (Show,Read,Eq)
-
-data Place = At String
-           deriving (Show,Read,Eq)
-
-data Messg = Msgs [String]
-           | Msg String
-           deriving (Show,Read,Eq)
-
-data Cost = Cst -- Fazer mais costs
-          deriving (Show,Read,Eq)
-
-
------------------ TotalProject
+----------------- Project
 
 data TotalProject' =
   TotalProject' Cycle' Duration' Endpoint' Totaltime' AddOns'
