@@ -8,6 +8,7 @@ import ProjectS
 
 import Data.Time
 import Data.Time.Clock
+import Control.Monad
 
 -------------------- Getting State
 
@@ -98,8 +99,8 @@ merge (name, ProjectS c d e t r) (State n ts)
 
     timeSpent
       :: Maybe TimeSpent
-      -> Maybe (Totaltime Minutes)
-      -> IsFinished (Maybe (Totaltime Minutes))
+      -> Maybe Totaltime
+      -> IsFinished (Maybe Totaltime)
     timeSpent Nothing t = Unfinished t
     timeSpent _ Nothing = Unfinished Nothing
     timeSpent (Just (TimeSpent timeS)) (Just (Totaltime tot))
@@ -152,155 +153,244 @@ mergeS projs may = case maybe of
 
 -------------------- Infering
 
+----- Helper Types
+type CycleStd = Double
+type DurStd   = [Double]
+type EndStd   = Double
+type TotalStd = Double
+type K        = Double
+
+infers
+  :: [(Name,ProjectS)]
+  -> [ProjectType]
+  -> IO [(Name, (CycleS,DurationS,Totaltime))]
+infers = zipWithM $ \(n,p) pt -> do
+  r <- infer pt p
+  return (n,r)
+
 infer
-  :: ProjectType -> ProjectS -> IO (CycleS, DurationS, Totaltime Double)
+  :: ProjectType
+  -> ProjectS
+  -> IO (CycleS, DurationS, Totaltime)
 infer pType (ProjectS c d e t r) = case pType of
   CD    -> do
     let d' = stdDur d
-    return (frj c, frj d, inferTotaltime d')
+    return (frj c, frj d, fromTotalStd $ inferTotaltime d')
   CD'   -> do
-    let d' = stdDur d
+--    let d' = stdDur d
     return (frj c, frj d, Infinity)
   DE    -> do
     let d' = stdDur d
-        k  = length d'
+        k  = len d'
     e' <- stdEndpoint e
-    return (inferCycle k e, frj d, inferTotaltime d')
+    return ( fromCycleStd $ inferCycle k e'
+           , frj d
+           , fromTotalStd $ inferTotaltime d')
   CE    -> do
     let c' = stdCycle c
     e' <- stdEndpoint e
-    let (d,t) = estimate c' e'
-    return (frj c,undefined,undefined)
+    (d',t') <- estimateDT_CE c' e'
+    return (frj c, d', fromTotalStd t')
   ET    -> do
-    let t' = t
+    let t' = stdTotaltime t
     e' <- stdEndpoint e
-    return (undefined,undefined,frj' t)
+    (c',d') <- estimateCD_ET e' t'
+    return (fromCycleStd c', d', frj t)
   CT    -> do
     let c' = stdCycle c
-        t' = t
-    return (frj c,undefined ,frj' t)
+        t' = stdTotaltime t
+    (d',_e') <- estimateDE_CT c' t'
+    return (frj c, d',frj t)
   CDE   -> do
     let c' = stdCycle c
         d' = stdDur d
+        k  = len d'
     e' <- stdEndpoint e
-    return (frj c, frj d,undefined)
+    putStr "c': "
+    print c'
+    putStr "e': "
+    print e'
+    putStrLn "c' * e': "
+    print $ c' * e'
+    putStr "k: "
+    print k
+    assert (floor $ c' * e') (floor k) "CDE: ce = k"
+    return (frj c, frj d, fromTotalStd $ inferTotaltime d')
   CD'E  -> do
     let c' = stdCycle c
-        d' = stdDur d
     e' <- stdEndpoint e
-    return (frj c, frj d,undefined)
+    let d' = truncDurCE d c' e'
+        d''= stdDur (Just d')
+    return (frj c, d', fromTotalStd $ inferTotaltime d'')
   CDT   -> do
     let c' = stdCycle c
         d' = stdDur d
-        t' = t
-    return (frj c, frj d, frj' t)
+        t' = stdTotaltime t
+    assert (sum d') t' "CDT: sum d = t"
+    return (frj c, frj d, frj t)
   CD'T  -> do
     let c' = stdCycle c
-        d' = stdDur d
-        t' = t
-    return (frj c, frj d, frj' t)
+        t' = stdTotaltime t
+        d' = truncDurT d t'
+    return (frj c, d', frj t)
   CET   -> do
     let c' = stdCycle c
     e' <- stdEndpoint e
-    let t' = t
-    return (frj c,undefined , frj' t)
-  DET   -> do
+    let t' = stdTotaltime t
+    return (frj c, inferDur c' e' t', frj t)
+  DET   -> do --
     let d' = stdDur d
+        k  = len d'
     e' <- stdEndpoint e
-    let t' = t
-    return (undefined, frj d, frj' t)
+    let t' = stdTotaltime t
+    assert (sum d') t' "DET: sum d = t"
+    return (fromCycleStd $ inferCycle k e', frj d, frj t)
   D'ET  -> do
-    let d' = stdDur d
+    let t' = stdTotaltime t
+        d' = truncDurT d t'
+        k  = len $ stdDur (Just d')
     e' <- stdEndpoint e
-    let t' = t
-    return (undefined, frj d, frj' t)
+    return (fromCycleStd $ inferCycle k e', d', frj t)
   CDET  -> do
     let c' = stdCycle c
         d' = stdDur d
+        k  = len d'
+        t' = stdTotaltime t
     e' <- stdEndpoint e
-    let t' = t
-    return (frj c, frj d, frj' t)
+    assert (sum d') t' "CDET: sum d = t"
+    assert (floor $ c' * e') (floor k) "CDET: ce = k"
+    return (frj c, frj d, frj t)
   CD'ET -> do
     let c' = stdCycle c
-        d' = stdDur d
+        t' = stdTotaltime t
+        d' = truncDurT d t'
+        d''= stdDur (Just d')
+        k  = len d''
     e' <- stdEndpoint e
-    let t' = t
-    return (frj c, frj d, frj' t)
-  where frj' (Just (Totaltime x))
-          = Totaltime (fromIntegral x)
-        frj' (Just (EffectiveTotaltime x))
-          = EffectiveTotaltime (fromIntegral x)
-        
-inferCycle = undefined
-inferTotaltime = Totaltime . fromIntegral . sum
+    assert (floor $ c' * e') (floor k) "CD'ET: ce = k"
+    return (frj c, d', frj t)
+
+----- To Standard Types
+
+stdCycle :: Maybe CycleS -> CycleStd
+stdCycle (Just (CycleS times mins))
+  = fromIntegral times / fromIntegral mins
+
+stdDur :: Maybe DurationS -> DurStd --[[Minutes]]
+stdDur (Just d) = case d of
+  DurationS    lst -> toStd lst
+  DurationInfS lst -> toStd lst
+  where
+    toStd = map (fromIntegral
+                 . sum
+                 . map durToMinutes
+                 . takeDurations)
+    takeDurations (_,l) = map (\(_,d,_) -> d) l
+
+stdEndpoint :: Maybe Endpoint -> IO EndStd
+stdEndpoint (Just (Endpoint end)) = do
+  now <- getCurrentTime
+  let t = (diffUTCTime (zonedTimeToUTC end) now) / 60
+  return $ realToFrac t
+
+stdTotaltime :: Maybe Totaltime -> TotalStd
+stdTotaltime (Just (Totaltime          m)) = fromIntegral m
+stdTotaltime (Just (EffectiveTotaltime m)) = fromIntegral m
+stdTotaltime _ = error "Error: stdTotaltime"
+
+----- From Standard Types
+
+fromTotalStd :: TotalStd -> Totaltime
+fromTotalStd = Totaltime . floor
+
+fromCycleStd :: CycleStd -> CycleS
+fromCycleStd timesPerMinutes
+  = CycleS 1
+    $ floor
+    $ 1 / timesPerMinutes
+
+----- Infering
+
+inferCycle :: K -> EndStd -> CycleStd
+inferCycle k e = k / e
+
+inferTotaltime :: DurStd -> TotalStd
+inferTotaltime = sum
+
+inferDur :: CycleStd -> EndStd -> TotalStd -> DurationS
+inferDur c e t = alwaysDur $ floor $ t / (c * e)
+
+----- Estimation (depois)
+
+estimateDT_CE :: CycleStd -> EndStd -> IO (DurationS,TotalStd)
+estimateDT_CE cycle minutesTillEnd = do
+  let d = 1.5
+  putStrLn
+    $ "Inferred: Duration of Project = " ++ show d ++ " hours."
+  return
+    ( alwaysDur $ floor $ d * 60
+    , cycle * minutesTillEnd * (d * 60))
+
+estimateCD_ET = undefined
+
+estimateDE_CT = undefined
+
+----- Truncation
+
+truncDurT :: Maybe DurationS -> TotalStd -> DurationS
+truncDurT d@(Just (DurationInfS xs)) t =
+  let k = length
+          $ takeWhile (<= t)
+          $ scanl (+) 0
+          $ cycle
+          $ stdDur d
+  in DurationS $ take k $ cycle xs
+
+truncDurCE :: Maybe DurationS -> CycleStd -> EndStd -> DurationS
+truncDurCE (Just (DurationInfS xs)) c e =
+  let k = floor $ c * e
+  in DurationS $ take k $ cycle xs
+
+----- Asserting
+    
+assert :: (Show a,Eq a) => a -> a -> String -> IO ()
+assert a b formula
+  | a == b    = return ()
+  | otherwise =
+    error
+    $ show a
+    ++ " different than "
+    ++ show b
+    ++ " in "
+    ++ formula ++ "."
+
+-------------------------- Helper Functions
+
+len :: DurStd -> Double
+len = fromIntegral . length
+
+tst = do
+  zone <- getZoneIO
+  end <- stdEndpoint
+         (Just
+          (Endpoint (fromGregToZoned zone (2016,3,16,12,0,0))))
+  let c' = stdCycle (Just (CycleS 1 (durToMinutes (Weeks 1))))
+      k = c' * end
+  print k
+  putStrLn "--------------"
+  return $ estimateDT_CE c' end
 
 alwaysDur =
   DurationInfS
   . (\x -> [(Nothing, x)])
   . (\x -> [(Nothing,x,NoInterval)])
   . Minutes
-  . (60 *)
-  
-estimate :: Double -> Minutes -> (DurationS,Double)
-estimate cycle minutesTillEnd
-  = ( alwaysDur 2
-    , cycle * fromIntegral minutesTillEnd * 2 * 60)
-
-roundAt2 :: Double -> Minutes
-roundAt2 = (\x -> if odd x then x - 1 else x) . ceiling
-
-tst = do
-  zone <- getZoneIO
-  end <- stdEndpoint
-         (Just
-          (Endpoint (fromGregToZoned zone (2016,4,2,3,0,0))))
-  let c' = stdCycle (Just (CycleS 2 (durToMinutes (Weeks 2))))
-  return $ estimate c' end
-  
-stdCycle :: Maybe CycleS -> Double
-stdCycle (Just (CycleS times mins))
-  = fromIntegral times / fromIntegral mins
-
-stdDur :: Maybe DurationS -> [Minutes] --[[Minutes]]
-stdDur (Just d) = case d of
-  DurationS lst ->
-    map
-    (sum . map durToMinutes . takeDurations)
-    lst
-  DurationInfS lst ->
-    map
-    (sum . map durToMinutes . takeDurations)
-    lst
-  where takeDurations (_,l) = map (\(_,d,_) -> d) l
-
-stdEndpoint :: Maybe Endpoint -> IO MinutesD
-stdEndpoint (Just (Endpoint end)) = do
-  now <- getCurrentTime
-  let a = ceiling ((diffUTCTime (zonedTimeToUTC end) now) / 60)
-          :: Minutes
-  return a
-
-
-
-{-inferEndpoint :: Double -> Int -> IO Endpoint
-inferEndpoint c k = do
-  now <- getCurrentTime
-  let timeLeft = (fromIntegral k) / c
-      a = fromRational (toRational ((floor timeLeft) * 60))
-          :: NominalDiffTime
-      end = addUTCTime a now
-  endp <- utcToLocalZonedTime end
-  return $ Endpoint endp-}
-
---- ? Sum ?
-
-
--------------------------- Helper Functions
 
 asdasd = undefined
 
 rotate :: Int -> [a] -> [a]
-rotate n xs = take (length xs) (drop n (cycle xs))
+rotate _ [] = []
+rotate n xs = zipWith const (drop n (cycle xs)) xs
 
 isNothing :: Maybe a -> Bool
 isNothing Nothing = True
