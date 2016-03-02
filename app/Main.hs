@@ -18,20 +18,30 @@ main = do
   newLine
   print $ recognizeCommands projs
   newLine
+  let y = (map (\(_,x) -> projectType x))
+          $ recognizeCommands projs
   print
     $ (map (\(n,a) -> (n,projectType a)))
-    $ recognizeCommands  projs
+    $ recognizeCommands projs
   ls <- mapM (\(n,projIO) -> do
                  proj <- projIO
                  return (n,proj)
              )
         $ map (\(n,cs) -> (n, makeProject cs))
-        $ recognizeCommands  projs
+        $ recognizeCommands projs
   newLine
   let ls' = read (show ls) :: [(Name, ProjectS)]
       equal = ls == ls'
+  st <- getState
+  let ls'' = mergeStates st ls'
+  r<-infers ls'' y
+  putStrLn "---------&&&&&---------"
+  print y
   print equal
-  newLine
-  print ls'
+  putStrLn "---------&&&&&---------"
+  print ls''
+  putStrLn "---------&&&&&---------"
+  print r
+  putStrLn "---------&&&&&---------"
   return ()
   

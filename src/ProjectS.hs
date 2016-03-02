@@ -328,7 +328,7 @@ endpoint endp = case endp of
       -- the project that ends today has endpoint
       -- at the beggining of the next day
 
-totaltime :: Command -> Totaltime Minutes
+totaltime :: Command -> Totaltime
 totaltime tot = case tot of
   TotaltimeC time -> Totaltime $ durToMinutes time
   EffectiveTotaltimeC time -> EffectiveTotaltime $ durToMinutes time

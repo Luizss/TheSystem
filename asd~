@@ -1,0 +1,14 @@
+[("aula tal",ProjectS (Just (CycleS 2 10080)) (Just (DurationS [(Nothing,[(Nothing,Hours 1,NoInterval)]),(Nothing,[(Nothing,Hours 2,NoInterval)]),(Nothing,[(Nothing,Hours 1,NoInterval)])])) (Just (Endpoint 2016-03-15 10:00:00 +0000)) Nothing,("palestra3",ProjectS (Just (CycleS 1 10080)) Nothing (Just (Endpoint 2016-03-17 00:00:00 +0000)) (Just (Totaltime 43200))),("palestra2",ProjectS (Just (CycleS 1 10080)) Nothing (Just (Endpoint 2016-03-17 00:00:00 +0000)) (Just (Totaltime 43200)) (RestS (Just (NotinS (And (Or Thursday Friday) (And (Complete (FromTo {from = 2016-03-03 15:00:00 +0000, to = 2016-03-03 17:00:00 +0000})) (Complete (FromTo {from = 2016-03-06 15:00:00 +0000, to = 2016-03-07 17:00:00 +0000})))))) (Just (At "unb")) (Just (Msgs ["hey you","brown\ncow","yea\n"])) [] []))]
+
+aula tal : CycleS 2 10080
+         , DurationS [(Nothing,[(Nothing,Hours 1,NoInterval)]),
+                      (Nothing,[(Nothing,Hours 2,NoInterval)]),
+                      (Nothing,[(Nothing,Hours 1,NoInterval)])]
+         ,Totaltime 240
+palestra3 : CycleS 1 10080
+          , DurationInfS [(Nothing,[(Nothing,Minutes 21220,NoInterval)])],Totaltime 43200)),
+
+palestra2 : CycleS 1 10080
+          , DurationInfS [(Nothing
+                         ,[(Nothing,Minutes 21220,NoInterval)])]
+          ,Totaltime 43200))]
