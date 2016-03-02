@@ -1,10 +1,10 @@
-Aula Tal => dur 1h
+Aula Tal => durs 1h, 2h, 2h
          & endpoint 15/03 10h
          & cycle 2 in 1 Week.
 
-Palestra3 => dur 1h & endpoint 17 & totaltime 30d.
+Palestra3 => cycle 1 in 1 Week & endpoint 17/7/2016 & totaltime 30h.
 
-Palestra2 => dur 1h & endpoint 17 & totaltime 30d
+Palestra2 => cycle 3 in 1 Week & endpoint 17 & totaltime 30h
           & msgs Hey you; Brown\cow; yea
           & notin (thursdays or fridays) and 3/3 15h - 3/3 17h and 6/3 15h - 7/3 17h
           & at UNB.
