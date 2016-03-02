@@ -6,5 +6,5 @@ Palestra3 => dur 1h & endpoint 17 & totaltime 30d.
 
 Palestra2 => dur 1h & endpoint 17 & totaltime 30d
           & msgs Hey you; Brown\cow; yea
-          & notin ((thursdays or fridays) and 3/3 15h - 3/3 17h) or 6/3 15h - 7/3 17h
+          & notin (thursdays or fridays) and 3/3 15h - 3/3 17h and 6/3 15h - 7/3 17h
           & at UNB.

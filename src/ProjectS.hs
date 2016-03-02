@@ -328,7 +328,7 @@ endpoint endp = case endp of
       -- the project that ends today has endpoint
       -- at the beggining of the next day
 
-totaltime :: Command -> Totaltime
+totaltime :: Command -> Totaltime Minutes
 totaltime tot = case tot of
   TotaltimeC time -> Totaltime $ durToMinutes time
   EffectiveTotaltimeC time -> EffectiveTotaltime $ durToMinutes time
@@ -659,11 +659,6 @@ costs = map commandToCosts . filter ((== CosT) . commandType)
     commandToCosts :: Command -> Cost
     commandToCosts _ = Cst
 
--------------------- Infer Quantities
-
---infer :: ProjectType -> ProjectS -> ProjectS
---infer pType proj = case pType of
-
 -------------------- Time Helper Functions
 
 fromInstantToCompleteTime :: Instant -> IO ZonedTime
@@ -695,14 +690,6 @@ putToday = putTemplate year where
   year (y,mo,d,_,_,_) (_,_,_,h,m,s) = (y,mo,d,h,m,s)
 
 -- Duration Functions
-  
-{-durToSeconds :: Dur -> Seconds
-durToSeconds dur = case dur of
-  Minutes  m -> m*60
-  Hours    h -> h*3600
-  Days     d -> d*86400
-  Weeks    w -> w*604800
-  Months  mo -> mo*18144000-}
 
 durToMinutes :: Dur -> Minutes
 durToMinutes dur = case dur of

@@ -184,7 +184,7 @@ data ProjectS
     (Maybe CycleS)
     (Maybe DurationS)
     (Maybe Endpoint)
-    (Maybe Totaltime)
+    (Maybe (Totaltime Minutes))
     RestS
   deriving (Show, Read, Eq)
 
@@ -210,9 +210,10 @@ data Endpoint
   = Endpoint ZonedTime
   deriving (Show, Read, Eq)
 
-data Totaltime
-  = Totaltime Minutes
-  | EffectiveTotaltime Minutes
+data Totaltime x
+  = Totaltime x
+  | EffectiveTotaltime x
+  | Infinity
   deriving (Show, Read, Eq)
 
 type InOrOut a = (Bool,a)
@@ -299,7 +300,7 @@ data TotalProject = TotalProject Cycle' Duration' AddOns'
 
 data Endpoint' = Maximum | Endpoint' ZonedTime
 
-data Totaltime' = Infinite | Finite Totaltime
+data Totaltime' = Infinite | Finite (Totaltime Minutes)
 
 type Message = String
 

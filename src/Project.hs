@@ -1,13 +1,17 @@
 module Project where
 
---import System.Directory
+-------------------- Imports
+
+import System.Directory
 import Data
 import ProjectS
 
 import Data.Time
 import Data.Time.Clock
 
-getState :: IO [(Name,State)] -- [(Name, State)]
+-------------------- Getting State
+
+getState :: IO [(Name,State)]
 getState = do
   let stateFile = ".state"
   doesIt <- doesFileExist stateFile
@@ -23,63 +27,41 @@ getState = do
       putStrLn "State Initialized."
       return state
 
-doesFileExist = undefined
-{-  
--- funcao feia (bem feia)
+-------------------- Merging State with Projects
+
 mergeStates
   :: [(Name, State)] -> [(Name, ProjectS)] -> [(Name, ProjectS)]
-mergeStates states projs = case states of
-  []   -> projs
-  s:ss -> mergeStates ss (mergeState s projs)
+mergeStates     [] projs = projs
+mergeStates (s:ss) projs = mergeStates ss (mergeState s projs)
+
+mergeState
+  :: (Name, State) -> [(Name, ProjectS)] -> [(Name, ProjectS)]
+mergeState (name, state) projects
+  = handleProject $ filter (\(n,_) -> n == name) projects
   where
-
-    mergeState
-      :: (Name, State)
-      -> [(Name, ProjectS)]
-      -> [(Name, ProjectS)]
-    mergeState (name, state) projects
-      = case filter (\(n,_) -> n == name) projects of
-        [] -> error $ "No project with name " ++ name ++ "."
-        [p@(n,_)] ->
-          substOrDelete
-          (\(n,_) -> n == name)
-          (merge p state)
-          projects
-        _ -> error $ "More than one project with name " ++ name ++ "."
-
-    substOrDelete :: (a -> Bool) -> Maybe a -> [a] -> [a]
-    substOrDelete _ _ [] = []
-    substOrDelete pred x' (x:xs)
-      | pred x && isNothing x' =         substOrDelete pred x' xs
-      | pred x                 = fj x' : substOrDelete pred x' xs
-      | otherwise              = x     : substOrDelete pred x' xs
-
-    fj (Just x) = x
-
-    isNothing Nothing = True
-    isNothing _ = False
+    handleProject  [] = errorNoProject
+    handleProject  ps
+      | length ps > 2 = errorMoreThanOneProject
+      | otherwise     = substOrDelete
+                        (\(n,_) -> n == name)
+                        (merge (head ps) state)
+                        projects
     
-    substProject
-      :: Maybe ProjectS
-      -> Name
-      -> [(Name,ProjectS)]
-      -> [(Name, ProjectS)]
-    substProject _ _ [] = []
-    substProject Nothing name ((n,p):projs)
-      | name == n = projs
-      | otherwise = (n,p ) : substProject Nothing name projs
-    substProject (Just p') name ((n,p):projs)
-      | name == n = (n,p') : projs
-      | otherwise = (n,p ) : substProject (Just p') name projs
+    errorNoProject
+       = error $ "No project with name " ++ name ++ "."
 
-    merge :: (Name,ProjectS) -> State -> Maybe (Name,ProjectS)
-    merge (name, ProjectS c d e t r) (State n ts)
-      | stepsDone n  d == Finished ||
-        timeSpent ts t == Finished = Nothing
-      | otherwise = let Unfinished d' = stepsDone n d
-                        Unfinished t' = timeSpent ts t
-                    in Just (name, ProjectS c d' e t' r)
-  
+    errorMoreThanOneProject
+      = error $ "More than one project with name " ++ name ++ "."
+
+merge :: (Name,ProjectS) -> State -> Maybe (Name,ProjectS)
+merge (name, ProjectS c d e t r) (State n ts)
+  | stepsDone n  d == Finished ||
+    timeSpent ts t == Finished = Nothing
+  | otherwise =
+    let Unfinished d' = stepsDone n d
+        Unfinished t' = timeSpent ts t
+    in Just (name, ProjectS c d' e t' r)
+  where 
     stepsDone
       :: Maybe StepsDone
       -> Maybe DurationS
@@ -87,8 +69,8 @@ mergeStates states projs = case states of
     stepsDone Nothing d = Unfinished d
     stepsDone _ Nothing = Unfinished Nothing
     stepsDone (Just (StepsDone 0)) jd = Unfinished jd
-    stepsDone n (Just (DurationInfS d)) =
-      stepsDone n (Just (DurationS (cycle d))) -- errado
+    stepsDone (Just (StepsDone n)) (Just (DurationInfS d)) =
+      error $ show $ Unfinished $ Just $ DurationInfS $ rotate n d
     stepsDone (Just (StepsDone n)) (Just (DurationS d)) = case d of
       [] -> Finished
       (name,dds) : xs
@@ -113,50 +95,35 @@ mergeStates states projs = case states of
         | otherwise -> stepsDone'
                        (StepsDone (n - length dds))
                        (DurationS xs)
-      
 
     timeSpent
-      :: Maybe TimeSpent -> Maybe Totaltime -> IsFinished (Maybe Totaltime)
+      :: Maybe TimeSpent
+      -> Maybe (Totaltime Minutes)
+      -> IsFinished (Maybe (Totaltime Minutes))
     timeSpent Nothing t = Unfinished t
     timeSpent _ Nothing = Unfinished Nothing
     timeSpent (Just (TimeSpent timeS)) (Just (Totaltime tot))
       | tot - timeS <= 0 = Finished
-      | otherwise        = Unfinished $ Just $ Totaltime $ tot - timeS
+      | otherwise = Unfinished $ Just $ Totaltime $ tot - timeS
     timeSpent
       (Just (TimeSpent timeS))
       (Just (EffectiveTotaltime tot))
       | tot - timeS <= 0 = Finished
       | otherwise        =
         Unfinished $ Just $ EffectiveTotaltime $ tot - timeS
--}
 
-
-{-----------------------------------------
--- teste da funçao mergeStates
-teste = mergeStates
-  [("itsme", State Nothing (Just (TimeSpent 5)))
-  ,("heheh", State (Just (StepsDone 1)) Nothing)]
-  [("heheh", ProjectS
-             Nothing
-             (
-               Just
-              (
-                DurationS
-               [
-                 (
-                   Nothing,
-                   [(Nothing,Minutes 3, NoInterval),
-                    (Nothing,Minutes 3, NoInterval)]
-                )
-               ]
-              )
-             )
-             Nothing
-             Nothing
-             restNo)
-  ,("itsme", ProjectS Nothing Nothing Nothing (Just (Totaltime 6)) restNo)] where
-    restNo = RestS Nothing Nothing Nothing [] []
-------------------------------------}
+substProject
+  :: Maybe ProjectS
+  -> Name
+  -> [(Name,ProjectS)]
+  -> [(Name, ProjectS)]
+substProject _ _ [] = []
+substProject Nothing name ((n,p):projs)
+  | name == n = projs
+  | otherwise = (n,p ) : substProject Nothing name projs
+substProject (Just p') name ((n,p):projs)
+  | name == n = (n,p') : projs
+  | otherwise = (n,p ) : substProject (Just p') name projs
 
 {-makeProject :: [(Name,ProjectS)] -> State -> ProjectS
 makeProject proj state = undefined
@@ -183,63 +150,209 @@ mergeS projs may = case maybe of
     stepsDone n d = drop n d
     timeSpent x t = t - x-}
 
-infer :: ProjectType -> ProjectS -> IO ProjectS
+-------------------- Infering
+
+infer
+  :: ProjectType -> ProjectS -> IO (CycleS, DurationS, Totaltime Double)
 infer pType (ProjectS c d e t r) = case pType of
   CD    -> do
+    let d' = stdDur d
+    return (frj c, frj d, inferTotaltime d')
+  CD'   -> do
+    let d' = stdDur d
+    return (frj c, frj d, Infinity)
+  DE    -> do
+    let d' = stdDur d
+        k  = length d'
+    e' <- stdEndpoint e
+    return (inferCycle k e, frj d, inferTotaltime d')
+  CE    -> do
+    let c' = stdCycle c
+    e' <- stdEndpoint e
+    let (d,t) = estimate c' e'
+    return (frj c,undefined,undefined)
+  ET    -> do
+    let t' = t
+    e' <- stdEndpoint e
+    return (undefined,undefined,frj' t)
+  CT    -> do
+    let c' = stdCycle c
+        t' = t
+    return (frj c,undefined ,frj' t)
+  CDE   -> do
     let c' = stdCycle c
         d' = stdDur d
-        k  = length d'
-    e <- inferEndpoint c' k
-    return $ ProjectS c d (Just e) (Just (inferTotaltime d')) r
-  CD'   -> asdasd
-  DE    -> asdasd
-  CE    -> asdasd
-  ET    -> asdasd
-  CT    -> asdasd
-  CDE   -> asdasd
-  CD'E  -> asdasd
-  CDT   -> asdasd
-  CD'T  -> asdasd
-  CET   -> asdasd
-  DET   -> asdasd
-  D'ET  -> asdasd
-  CDET  -> asdasd
-  CD'ET -> asdasd
+    e' <- stdEndpoint e
+    return (frj c, frj d,undefined)
+  CD'E  -> do
+    let c' = stdCycle c
+        d' = stdDur d
+    e' <- stdEndpoint e
+    return (frj c, frj d,undefined)
+  CDT   -> do
+    let c' = stdCycle c
+        d' = stdDur d
+        t' = t
+    return (frj c, frj d, frj' t)
+  CD'T  -> do
+    let c' = stdCycle c
+        d' = stdDur d
+        t' = t
+    return (frj c, frj d, frj' t)
+  CET   -> do
+    let c' = stdCycle c
+    e' <- stdEndpoint e
+    let t' = t
+    return (frj c,undefined , frj' t)
+  DET   -> do
+    let d' = stdDur d
+    e' <- stdEndpoint e
+    let t' = t
+    return (undefined, frj d, frj' t)
+  D'ET  -> do
+    let d' = stdDur d
+    e' <- stdEndpoint e
+    let t' = t
+    return (undefined, frj d, frj' t)
+  CDET  -> do
+    let c' = stdCycle c
+        d' = stdDur d
+    e' <- stdEndpoint e
+    let t' = t
+    return (frj c, frj d, frj' t)
+  CD'ET -> do
+    let c' = stdCycle c
+        d' = stdDur d
+    e' <- stdEndpoint e
+    let t' = t
+    return (frj c, frj d, frj' t)
+  where frj' (Just (Totaltime x))
+          = Totaltime (fromIntegral x)
+        frj' (Just (EffectiveTotaltime x))
+          = EffectiveTotaltime (fromIntegral x)
+        
+inferCycle = undefined
+inferTotaltime = Totaltime . fromIntegral . sum
 
-inferEndpoint :: Double -> Int -> IO Endpoint
+alwaysDur =
+  DurationInfS
+  . (\x -> [(Nothing, x)])
+  . (\x -> [(Nothing,x,NoInterval)])
+  . Minutes
+  . (60 *)
+  
+estimate :: Double -> Minutes -> (DurationS,Double)
+estimate cycle minutesTillEnd
+  = ( alwaysDur 2
+    , cycle * fromIntegral minutesTillEnd * 2 * 60)
+
+roundAt2 :: Double -> Minutes
+roundAt2 = (\x -> if odd x then x - 1 else x) . ceiling
+
+tst = do
+  zone <- getZoneIO
+  end <- stdEndpoint
+         (Just
+          (Endpoint (fromGregToZoned zone (2016,4,2,3,0,0))))
+  let c' = stdCycle (Just (CycleS 2 (durToMinutes (Weeks 2))))
+  return $ estimate c' end
+  
+stdCycle :: Maybe CycleS -> Double
+stdCycle (Just (CycleS times mins))
+  = fromIntegral times / fromIntegral mins
+
+stdDur :: Maybe DurationS -> [Minutes] --[[Minutes]]
+stdDur (Just d) = case d of
+  DurationS lst ->
+    map
+    (sum . map durToMinutes . takeDurations)
+    lst
+  DurationInfS lst ->
+    map
+    (sum . map durToMinutes . takeDurations)
+    lst
+  where takeDurations (_,l) = map (\(_,d,_) -> d) l
+
+stdEndpoint :: Maybe Endpoint -> IO MinutesD
+stdEndpoint (Just (Endpoint end)) = do
+  now <- getCurrentTime
+  let a = ceiling ((diffUTCTime (zonedTimeToUTC end) now) / 60)
+          :: Minutes
+  return a
+
+
+
+{-inferEndpoint :: Double -> Int -> IO Endpoint
 inferEndpoint c k = do
   now <- getCurrentTime
   let timeLeft = (fromIntegral k) / c
-      a = fromRational (toRational ((floor timeLeft) * 60)) :: NominalDiffTime
+      a = fromRational (toRational ((floor timeLeft) * 60))
+          :: NominalDiffTime
       end = addUTCTime a now
   endp <- utcToLocalZonedTime end
-  return $ Endpoint endp
-      
-
-inferTotaltime = Totaltime . sum
-
-type TimesPerMinutes = Double
-
-stdCycle :: Maybe CycleS -> TimesPerMinutes
-stdCycle (Just (CycleS times mins)) = fromIntegral times / fromIntegral mins
+  return $ Endpoint endp-}
 
 --- ? Sum ?
-stdDur :: Maybe DurationS -> [Minutes] --[[Minutes]]
-stdDur (Just (DurationS lst))
-  = map
-  ( sum . map durToMinutes . takeDurations)
-  lst
-  where takeDurations (_,l) = map (\(_,d,_) -> d) l
 
-stdEndpoint :: Maybe Endpoint -> IO Minutes
-stdEndpoint (Just (Endpoint end)) = do
-  now <- getCurrentTime
-  let a = ceiling ((diffUTCTime (zonedTimeToUTC end) now) / 60) :: Minutes
-  return a
-  
+
+-------------------------- Helper Functions
+
 asdasd = undefined
 
-ts = stdDur (Just (DurationS
+rotate :: Int -> [a] -> [a]
+rotate n xs = take (length xs) (drop n (cycle xs))
+
+isNothing :: Maybe a -> Bool
+isNothing Nothing = True
+isNothing _ = False
+
+substOrDelete :: (a -> Bool) -> Maybe a -> [a] -> [a]
+substOrDelete _ _ [] = []
+substOrDelete pred x' (x:xs)
+  | pred x && isNothing x' =          substOrDelete pred x' xs
+  | pred x                 = frj x' : substOrDelete pred x' xs
+  | otherwise              = x      : substOrDelete pred x' xs
+
+fromJust :: Maybe a -> a
+fromJust (Just x) = x
+
+frj :: Maybe a -> a
+frj = fromJust
+
+---------------------------------- Teste
+
+-- teste da funçao mergeStates
+teste = mergeStates
+  [("itsme", State Nothing (Just (TimeSpent 5)))
+  ,("heheh", State (Just (StepsDone 1)) Nothing)]
+  [("heheh", ProjectS
+             Nothing
+             (
+               Just
+              (
+                DurationInfS
+               [
+                 (
+                   Nothing,
+                   [(Nothing,Minutes 5, NoInterval),
+                    (Nothing,Minutes 4, NoInterval),
+                    (Nothing,Minutes 3, NoInterval)]
+                ),(
+                   Nothing,
+                   [(Nothing,Minutes 10, NoInterval),
+                    (Nothing,Minutes 8, NoInterval),
+                    (Nothing,Minutes 6, NoInterval)]
+                )
+               ]
+              )
+             )
+             Nothing
+             Nothing
+             restNo)
+  ,("itsme", ProjectS Nothing Nothing Nothing (Just (Totaltime 6)) restNo)] where
+    restNo = RestS Nothing Nothing Nothing [] []
+
+ts = stdDur (Just (DurationInfS
                [
                  (
                    Nothing,

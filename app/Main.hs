@@ -3,6 +3,7 @@ module Main where
 import Data
 import Parser
 import Command
+import ProjectS
 import Project
 
 newLine = putStrLn ""
@@ -27,7 +28,7 @@ main = do
         $ map (\(n,cs) -> (n, makeProject cs))
         $ recognizeCommands  projs
   newLine
-  let ls' = read (show ls) :: [(Name, Project)]
+  let ls' = read (show ls) :: [(Name, ProjectS)]
       equal = ls == ls'
   print equal
   newLine
