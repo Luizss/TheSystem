@@ -12,11 +12,14 @@
 *** funçao dropUntilPresent para que a lista nao fique gigante
 *** dropUntilPresent deve ser eficiente
 *** Nao necessario pois a lista começa do presente
-** Problema com interval constraints
+** DONE Problema com interval constraints
 *** Nao se sabe o que fazer quando os intervalos sao indefinidos
 *** Sabe-se que para specialwords apenas a funçao mergeIntervals funciona pois os casos indefinidos ocorrem apenas no inicio
 *** Quando mergeintervals e usado com Interval os casos na maioria das vezes sao indefinidos e a funcao atual nao funciona
 *** Para Interval, o certo seria definir o intervalo como True e todo o resto como False, para specialwords nao
+*** Done: modificou-se a maneira como sao interpretados os intervals puros
+** Infer: nao foram implementadas maneiras para estimar valores - isso deve ser melhor pensado
+** Colocar 'message logs' na funçao infer
 * O que esta decidido
 ** Sleeping sera um projeto normal com prioridade maxima no algoritmo
 ** Sleeping_penalty e o projeto que substitui Sleeping em um caso de saturaçao. Isso pode ocorrer tambem para qualquer outro projeto.

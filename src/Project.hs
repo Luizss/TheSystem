@@ -177,7 +177,6 @@ infer pType (ProjectS c d e t r) = case pType of
     let d' = stdDur d
     return (frj c, frj d, fromTotalStd $ inferTotaltime d')
   CD'   -> do
---    let d' = stdDur d
     return (frj c, frj d, Infinity)
   DE    -> do
     let d' = stdDur d
@@ -200,20 +199,20 @@ infer pType (ProjectS c d e t r) = case pType of
     let c' = stdCycle c
         t' = stdTotaltime t
     (d',_e') <- estimateDE_CT c' t'
-    return (frj c, d',frj t)
+    return (frj c, d', frj t)
   CDE   -> do
     let c' = stdCycle c
         d' = stdDur d
         k  = len d'
     e' <- stdEndpoint e
-    putStr "c': "
+    {-putStr "c': "
     print c'
     putStr "e': "
     print e'
     putStrLn "c' * e': "
     print $ c' * e'
     putStr "k: "
-    print k
+    print k-}
     assert (floor $ c' * e') (floor k) "CDE: ce = k"
     return (frj c, frj d, fromTotalStd $ inferTotaltime d')
   CD'E  -> do
@@ -364,7 +363,9 @@ assert a b formula
     ++ " in "
     ++ formula ++ "."
 
--------------------------- Helper Functions
+-------------------- 
+
+-------------------- Helper Functions
 
 len :: DurStd -> Double
 len = fromIntegral . length
