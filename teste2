@@ -1,8 +1,12 @@
-Aula Tal => durs 1h, 2h, 2h
+Aula Tal => durs 1h, 2h
          & endpoint 15/03 10h
          & cycle 2 in 1 Week.
 
 Palestra3 => cycle 1 in 1 Week & endpoint 17/7/2016 & totaltime 30h.
+
+cd => cycle 2 in 1 Day & dur 3h.
+
+cet => cycle 2 in 1 Day & endpoint 17/7/2016 & dur 3h.
 
 Palestra2 => cycle 3 in 1 Week & endpoint 17 & totaltime 30h
           & msgs Hey you; Brown\cow; yea

@@ -1,0 +1,25 @@
+module Activities where
+
+----------------------- Imports
+
+import Data.Time
+import Data
+
+----------------------- Activities Creation
+
+activitiesFromProject
+  :: Project -> [Activity]
+activitiesFromProject
+  (Project (CycleP bien cyc) (DurationP dur) res)
+  = go cyc dur
+  where
+    go _ [] = []
+    go (c:cs) (d:ds) = makeActivities c d ++ go cs ds
+
+    makeActivities
+      :: (Int, [InOrOut (Interval ZonedTime)])
+      -> (Maybe Name, Maybe Message
+         , [(Maybe Name, Dur, Interval Dur)])
+      -> [Activity]
+    makeActivities (times, ints) (mName, mMess, divs)
+      = undefined

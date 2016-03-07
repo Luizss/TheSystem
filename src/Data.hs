@@ -198,7 +198,7 @@ data RestS
   deriving (Show, Read, Eq)
 
 data CycleS
-  = CycleS Int Minutes
+  = CycleS Int Dur
   deriving (Show, Read, Eq)
 
 data DurationS
@@ -226,15 +226,6 @@ data IntervalConstraintS
   | NotendS   SpecialInterval
   | EndS      SpecialInterval
   deriving (Show, Read, Eq)
-           
-{-data IntervalConstraint
-  = Notin    [InOrOut (Interval ZonedTime)]
-  | In       [InOrOut (Interval ZonedTime)]
-  | Notbegin [InOrOut (Interval ZonedTime)]
-  | Begin    [InOrOut (Interval ZonedTime)]
-  | Notend   [InOrOut (Interval ZonedTime)]
-  | End      [InOrOut (Interval ZonedTime)]
-  deriving (Show, Read, Eq)-}
 
 data Constraint
   = After Name
@@ -260,12 +251,12 @@ instance Ord ZonedTime where
   ZonedTime time _ <= ZonedTime time' _
     = time <= time'
 
------------------ State And Project
+----------------- State And Infer
 
 newtype StepsDone
   = StepsDone Int
   deriving (Show, Read, Eq)
-           
+
 newtype TimeSpent
   = TimeSpent Minutes
   deriving (Show, Read, Eq)
@@ -278,16 +269,95 @@ data IsFinished x
   = Finished | Unfinished x
   deriving (Show, Read, Eq)
 
-{-
-type State = State [(Name, StateType)]
-
-data StateType = StepsDone Int
-               | TimeSpent Minutes
-               | Both Int Minutes
-               deriving (Show, Read, Eq)
--}
-
 ----------------- Project
+
+type Message = String
+
+data Project
+  = Project CycleP DurationP RestP
+  deriving (Show,Eq)
+
+data CycleP
+  = CycleP BIEn [(Int, [InOrOut (Interval ZonedTime)])]
+  deriving Eq
+
+instance Show CycleP where
+  show (CycleP bien s)
+    = "CycleP "
+      ++ show bien
+      ++ " "
+      ++ show (take 20 s)
+
+data DurationP
+  = DurationP
+    [( Maybe Name, Maybe Message
+     , [(Maybe Name, Dur, Interval Dur)])]
+  deriving Eq
+
+instance Show DurationP where
+  show (DurationP lst)
+    = "DurationP " ++ show (tos lst)
+  -- = "k = " ++ show (length lst)
+
+tos = map (\(_,_,l) -> map (\(_,d,_) -> d) l)
+
+data BIEn
+  = B | I | En
+  deriving (Show,Eq,Read)
+--- begin | in | end
+
+data RestP
+  = RestP
+    { getPlace  :: (Maybe Place)
+    , getConstr :: [Constraint]
+    , getCost   :: [Cost] }
+  deriving (Show, Read, Eq)
+
+data IntervalConstraint
+  = Notin    [InOrOut (Interval ZonedTime)]
+  | In       [InOrOut (Interval ZonedTime)]
+  | Notbegin [InOrOut (Interval ZonedTime)]
+  | Begin    [InOrOut (Interval ZonedTime)]
+  | Notend   [InOrOut (Interval ZonedTime)]
+  | End      [InOrOut (Interval ZonedTime)]
+  deriving (Show, Read, Eq)
+
+----------------- Activities
+
+type MaxDuration = Minutes
+type OkInterval  = [InOrOut (Interval ZonedTime)]
+data EndEvent    = EndEvent
+
+data Activity
+  = Activity
+    Name
+    MaxDuration
+    OkInterval
+    (Maybe Place)
+    (Maybe EndEvent)
+    [Constraint]
+    [Cost]
+    Message
+    (Maybe ((Interval Dur), Activity))
+
+----------------- Schedule
+
+type Schedule = [ScheduleUnit]
+
+data ScheduleUnit
+  = ScheduleUnit
+    ActivityPrim
+    (Interval ZonedTime) -- fromto
+    Place
+    EndEvent
+
+data ActivityPrim
+  = ActivityPrim
+    Name
+    Message
+    MaxDuration
+    
+----------------- Total Project
 
 data TotalProject' =
   TotalProject' Cycle' Duration' Endpoint' Totaltime' AddOns'
@@ -302,16 +372,13 @@ data Endpoint' = Maximum | Endpoint' ZonedTime
 
 data Totaltime' = Infinite | Finite Totaltime
 
-type Message = String
-
 data Cycle' = Cycle' [Interval ZonedTime]
 
 data Duration' =
   Duration'
-  [(Maybe Name,
-    Maybe Message,
-    [(Maybe Name, Maybe Message, Dur, Interval Dur)]
-   )]
+  [( Maybe Name
+   , Maybe Message
+   , [(Maybe Name, Maybe Message, Dur, Interval Dur)])]
   deriving (Show,Read,Eq)
 
 newtype AddOns' = AddOns' [AddOn']
@@ -320,7 +387,6 @@ data AddOn' = Constraint' Constraint
             | Place' Place
             | Cost' Cost
             deriving (Show, Read, Eq)
-
 
 {-
 data Project =

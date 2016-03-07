@@ -20,6 +20,9 @@
 *** Done: modificou-se a maneira como sao interpretados os intervals puros
 ** Infer: nao foram implementadas maneiras para estimar valores - isso deve ser melhor pensado
 ** Colocar 'message logs' na funçao infer
+** Qual e a relaçao entre EndEvent e Totaltime? So existe 1 endevent por enquanto (effective total time)?
+*** Implementar isso dai - ainda nao implementado
+** Verificar se a retirada de FromTo i i e equivocada ou nao nos arquivos passados
 * O que esta decidido
 ** Sleeping sera um projeto normal com prioridade maxima no algoritmo
 ** Sleeping_penalty e o projeto que substitui Sleeping em um caso de saturaçao. Isso pode ocorrer tambem para qualquer outro projeto.

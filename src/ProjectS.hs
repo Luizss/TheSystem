@@ -18,7 +18,7 @@ commandType :: Command -> CommandType
 commandType comm = case comm of
   CycleC _ _            -> C
 
-  DurationC _           -> D
+  DurationC _           -> D'
   DurationsC _          -> D
   DurationsiC _         -> D'
   DurationsnC _         -> D
@@ -232,13 +232,13 @@ makeProject csUnsorted = case projectTypeHandlingErrors cs of
 ----- Cycle, Duration, Endpoint, Totaltime Construction
     
 cycl :: Command -> CycleS
-cycl (CycleC num time) = CycleS num (durToMinutes time)
+cycl (CycleC num time) = CycleS num time --(durToMinutes time)
 cycl _ = error "cycl: Wrong command type."
 
 duration :: Command -> DurationS
 duration comm = case comm of
   DurationC tim ->
-    dur $ [(Nothing,[(Nothing, tim, NoInterval)])]
+    cycle $ [(Nothing,[(Nothing, tim, NoInterval)])]
   DurationsC tims ->
     dur $ map
     (\tim -> (Nothing, [(Nothing, tim, NoInterval)]))
@@ -384,233 +384,6 @@ intervalConstraint = iCons . filter ((== ICons) . commandType)
         return (Exact  t')
       NoInterval -> return NoInterval
       
-{-intervalConstraint :: [Command] -> IO (Maybe IntervalConstraint)
-intervalConstraint = iCons . filter ((== ICons) . commandType)
-  where
-    iCons  [] = return Nothing
-    iCons [x] = Just <$> commandToICons x
-    iCons   _ = error "More than one interval constraint defined."
-
-    commandToICons :: Command -> IO IntervalConstraint
-    commandToICons c = case c of
-      NotinC    spec -> Notin    <$> fromSpecialToNonSpecial spec
-      InC       spec -> In       <$> fromSpecialToNonSpecial spec
-      NotbeginC spec -> Notbegin <$> fromSpecialToNonSpecial spec
-      BeginC    spec -> Begin    <$> fromSpecialToNonSpecial spec
-      NotendC   spec -> Notend   <$> fromSpecialToNonSpecial spec
-      EndC      spec -> End      <$> fromSpecialToNonSpecial spec
-
-    fromSpecialToNonSpecial ::
-      SpecialInterval -> IO [InOrOut (Interval ZonedTime)]
-    fromSpecialToNonSpecial spec = case spec of
-
-      Dawn       -> makeIntervals isDawn      (Hours 6) (Days 1)
-      Morning    -> makeIntervals isMorning   (Hours 6) (Days 1)
-      Evening    -> makeIntervals isEvening   (Hours 6) (Days 1)
-      Night      -> makeIntervals isNight     (Hours 6) (Days 1)
-    
-      Sunday     -> makeIntervals isSunday    (Days 1) (Weeks 1)
-      Monday     -> makeIntervals isMonday    (Days 1) (Weeks 1)
-      Tuesday    -> makeIntervals isTuesday   (Days 1) (Weeks 1)
-      Wednesday  -> makeIntervals isWednesday (Days 1) (Weeks 1)
-      Thursday   -> makeIntervals isThursday  (Days 1) (Weeks 1)
-      Friday     -> makeIntervals isFriday    (Days 1) (Weeks 1)
-      Saturday   -> makeIntervals isSaturday  (Days 1) (Weeks 1)
-
-      January    -> makeIntervals isJanuary   (Months 1) (Months 12)
-      February   -> makeIntervals isFebruary  (Months 1) (Months 12)
-      March      -> makeIntervals isMarch     (Months 1) (Months 12)
-      April      -> makeIntervals isApril     (Months 1) (Months 12)
-      May        -> makeIntervals isMay       (Months 1) (Months 12)
-      June       -> makeIntervals isJune      (Months 1) (Months 12)
-      July       -> makeIntervals isJuly      (Months 1) (Months 12)
-      August     -> makeIntervals isAugust    (Months 1) (Months 12)
-      September  -> makeIntervals isSeptember (Months 1) (Months 12)
-      October    -> makeIntervals isOctober   (Months 1) (Months 12)
-      November   -> makeIntervals isNovember  (Months 1) (Months 12)
-      December   -> makeIntervals isDecember  (Months 1) (Months 12)
-
-      Interval i -> do
-        now <- getZonedTime
-        zTime <- propag $ fmap fromInstantToCompleteTime i
-        let FromTo fr to = onlyFromTo zTime
-        return
-          [(False, FromTo now fr)
-          ,(True , FromTo fr to)
-          ,(False, FromTo to (add1Year to))]
-
-      And s1 s2  ->
-        mergeIntervals (&&)
-        <$> fromSpecialToNonSpecial s1
-        <*> fromSpecialToNonSpecial s2
-      Or  s1 s2  ->
-        mergeIntervals (||)
-        <$> fromSpecialToNonSpecial s1
-        <*> fromSpecialToNonSpecial s2
-  
-    mergeIntervals
-      :: (Bool -> Bool -> Bool)
-      -> [InOrOut (Interval ZonedTime)]
-      -> [InOrOut (Interval ZonedTime)]
-      -> [InOrOut (Interval ZonedTime)]
-    mergeIntervals merge x = zipIntervals . go x where
-      go ((a, FromTo frA toA) : restA) ((b, FromTo frB toB) : restB)
-        | frA == frB && toA < toB =
-          (merge a b, FromTo frA toA)
-          : go restA ((b, FromTo toA toB) : restB)
-        | frA == frB && toA > toB =
-          (merge a b, FromTo frA toB)
-          : go ((a, FromTo toB toA) : restA) restB
-        | frA == frB && toA == toB =
-          (merge a b, FromTo frA toA)
-          : go restA restB
-        | toA < frB =
-          --(merge a (not b), FromTo frA toA) :
-          go restA ((b, FromTo frB toB) : restB)
-        | toB < frA =
-          --(merge (not a) b, FromTo frB toB) :
-          go ((a, FromTo frA toA) : restA) restB
-        | frA < frB =
-          --(merge a (not b), FromTo frA frB) :
-          go
-          ((a, FromTo frB toA) : restA)
-          ((b, FromTo frB toB) : restB)
-        | frA > frB =
-          --(merge (not a) b, FromTo frB frA) :
-          go
-          ((a, FromTo frA toA) : restA)
-          ((b, FromTo frA toB) : restB)
-      go [] _ = []
-      go _ [] = []
-
-    zipIntervals :: [InOrOut (Interval ZonedTime)]
-                 -> [InOrOut (Interval ZonedTime)]
-    zipIntervals  [] = []
-    zipIntervals [x] = [x]
-    zipIntervals ((a, FromTo x y) : (b, FromTo z w) : xs)
-      | y == z && a == b = zipIntervals ((a, FromTo x w) : xs)
-      | otherwise = (a, FromTo x y)
-                    : zipIntervals ((b, FromTo z w) : xs)
-
-    propag :: Monad m => Interval (m a) -> m (Interval a)
-    propag int = case int of
-      FromTo fr to -> do
-        fr' <- fr
-        to' <- to
-        return (FromTo fr' to')
-      OrMore t -> do
-        t'  <-  t
-        return (OrMore t')
-      Exact  t -> do
-        t'  <-  t
-        return (Exact  t')
-      NoInterval -> return NoInterval
-      
-    onlyFromTo (FromTo t r) = FromTo t r
-    onlyFromTo (Exact    t) = FromTo t t
-    onlyFromTo (OrMore   t) = FromTo t (add1Year t)
-    onlyFromTo NoInterval   = NoInterval
-
-    add1Year = addTime (durToMinutes (Months 12))
-
-{- Entendimento dessa funçao exige uma certa teoria
-   Ela pega o momento atual e retorna uma lista de intervalos
-   em que a funçao 'isIn' e verdadeira ou nao -}
-makeIntervals
-  :: (ZonedTime -> Bool)
-  -> Dur -- Duration of Intervals
-  -> Dur -- Period between Intervals
-  -> IO [InOrOut (Interval ZonedTime)]
-makeIntervals isIn dur per = do
-  now <- getZonedTime
-  let (headIn,nextMark) = getHeadIn now
-      headOut = getHeadOut nextMark
-      (_, FromTo a seed) = headOut
-      rest = take 10 $ makeRestFromSeed seed
-  return $ headIn ++ [headOut] ++ rest
-  where
-    durMin = durToMinutes dur
-    perMin = durToMinutes per
-    
-    getHeadIn :: ZonedTime
-              -> ([InOrOut (Interval ZonedTime)], ZonedTime)
-    getHeadIn now = case isIn now of
-        False -> ([], now)
-        True  -> go now (addTime durMin now)
-      where 
-        go now nextTime = case isIn nextTime of
-          False ->
-            let rounded = roundAtBegginingOfInterval nextTime
-            in ([(True, FromTo now rounded)], rounded)
-          True  -> go now (addTime durMin nextTime)
-
-    getHeadOut :: ZonedTime -> InOrOut (Interval ZonedTime)
-    getHeadOut mark = go mark where
-      go time =
-        let next = addTime durMin time
-        in case isIn next of
-          True  ->
-            (False, FromTo mark (roundAtBegginingOfInterval next))
-          False -> go next
-      
-    roundAtBegginingOfInterval :: ZonedTime -> ZonedTime
-    roundAtBegginingOfInterval = case dur of   
-      Hours  6 -> roundAt6Hours
-      Days   1 -> roundAtDay 
-      Weeks  1 -> roundAtWeek
-      Months 1 -> roundAtMonth
-
-    makeRestFromSeed :: ZonedTime -> [InOrOut (Interval ZonedTime)]
-    makeRestFromSeed seed =
-      (True, FromTo seed to)
-      : (False, FromTo to newSeed)
-      : makeRestFromSeed newSeed
-      where to = addTime durMin seed
-            newSeed = addTime perMin seed
-
-addTime :: Minutes -> ZonedTime -> ZonedTime
-addTime amount date@(ZonedTime _ timeZone) =
-  utcToZonedTime timeZone
-  $ addMinutes (fromIntegral amount)
-  $ zonedTimeToUTC date
-
-isPeriodOfDay :: (Int -> Bool) -> ZonedTime -> Bool
-isPeriodOfDay f time =
-  let (_,_,_,h,_,_) = fromZonedToGreg time in f h
-
-isDayOfWeek :: (Int -> Bool) -> ZonedTime -> Bool
-isDayOfWeek f time =
-  let (_,_,wd) = fromZonedToWeekDate time in f wd
-
-isMonth :: (Int -> Bool) -> ZonedTime -> Bool
-isMonth f time =
-  let (_,mo,_,_,_,_) = fromZonedToGreg time in f mo
-
-isDawn      = isPeriodOfDay (\h -> h >= 0  && h <  6)
-isMorning   = isPeriodOfDay (\h -> h >= 6  && h < 12)
-isEvening   = isPeriodOfDay (\h -> h >= 12 && h < 18)
-isNight     = isPeriodOfDay (\h -> h >= 18 && h <= 23)
-
-isSunday    = isDayOfWeek (==7)
-isMonday    = isDayOfWeek (==1)
-isTuesday   = isDayOfWeek (==2)
-isWednesday = isDayOfWeek (==3)
-isThursday  = isDayOfWeek (==4)
-isFriday    = isDayOfWeek (==5)
-isSaturday  = isDayOfWeek (==6)
-
-isJanuary   = isMonth (==1)
-isFebruary  = isMonth (==2)
-isMarch     = isMonth (==3)
-isApril     = isMonth (==4)
-isMay       = isMonth (==5)
-isJune      = isMonth (==6)
-isJuly      = isMonth (==7)
-isAugust    = isMonth (==8)
-isSeptember = isMonth (==9)
-isOctober   = isMonth (==10)
-isNovember  = isMonth (==11)
-isDecember  = isMonth (==12)-}
 
 -- Place
 
@@ -698,6 +471,7 @@ durToMinutes dur = case dur of
   Days     d -> d*1440
   Weeks    w -> w*10080
   Months  mo -> mo*302400
+  Plus   x y -> durToMinutes x + durToMinutes y
 
 -- ZonedTime Manipulation Functions
 
@@ -709,8 +483,9 @@ getZone (ZonedTime _ timeZone@(TimeZone mins _ _)) = (timeZone,mins)
 
 fromGregToZoned :: (TimeZone, Minutes) -> Gregorian -> ZonedTime
 fromGregToZoned (timeZone, offset) (y,mo,d,h,m,s) =
-    utcToZonedTime timeZone
-    $ fromGregorian y mo d h (m-offset) s
+  utcToZonedTime timeZone
+  $ addMinutes (-(fromIntegral offset))
+  $ fromGregorian y mo d h m s
 
 fromZonedToGreg :: ZonedTime -> (Integer, Int, Int, Int, Int,Int)
 fromZonedToGreg time@(ZonedTime _ timeZone@(TimeZone mins _ _)) =
