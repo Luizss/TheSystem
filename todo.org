@@ -1,7 +1,4 @@
 * TODO e lembretes
-** Arquivo para erros
-** Arquivo Helper - Necessario?
-** Fazer Comandos do tipo Costs
 ** DONE Comandos do tipo 'notins' poderao parsear instantes ou palavras especiais como "thrusday" e etc
 ** DONE Porque instant parser nao aceita hourMin? - Command.hs
    Analisar o caso: agora aceita.
@@ -18,11 +15,57 @@
 *** Quando mergeintervals e usado com Interval os casos na maioria das vezes sao indefinidos e a funcao atual nao funciona
 *** Para Interval, o certo seria definir o intervalo como True e todo o resto como False, para specialwords nao
 *** Done: modificou-se a maneira como sao interpretados os intervals puros
-** Infer: nao foram implementadas maneiras para estimar valores - isso deve ser melhor pensado
+** DONE Problema no teste: endpoint 17/7 acaba em 18/7 0h. Nao deveria ser 17/7 as 0h??
+*** Ver isso dai => funcao deve truncar os 'to's dos FromTo's que passarem do endpoint
+*** Mesmo assim, provavelmente existe um erro com a inferencia
+*** Esse erro e aceitavel? nao.
+*** Resolvido: funcao scanl acaba fazendo com que k fique com mais 1 unidade
+** DONE Porque 'cet' acaba em 16/7 quando o endpoint e 17/7?
+*** Esta certo mas talvez esteja cedo demais. (problema com inferencia?)
+*** Resolvido: Rounding na inferencia causa esse problema. O problema abaixo soluciona tambem esse problema
+** DONE Ultima duraçao de um totaltime deve ser o suficiente para que o totaltime seja igual ao especificado
+*** tot = 18.75, dur = 5 => ultima_dur(decima-nona) = 5 *75, resto_dur = 5
+*** Isso pode ser feito na mesma funcao do problema acima (?)
+*** Feito.
+** DONE Tipo helper 'Durs' tem um nome ruim pois 'Dur' nao pode existir (ja esta sendo usado)
+*** Mudar isso ai
+** DONE Porque o projeto 'cd' e truncado para 2022? Ele nao deveria ter parado antes?
+*** Resolvido: DurToMinutes estava errado para o caso Months
+** DONE Problemas com 'cd' e month: adiçao de 1 dia de vez enquando ==> need rounding
+     Activity "cd" 180 [(True,FromTo {from = 2016-04-01 00:00:00 BRT, to = 2016-05-02 00:00:00 BRT})] Nothing Nothing [] [] "" Nothing
+   , Activity "cd" 180 [(True,FromTo {from = 2016-05-02 00:00:00 BRT, to = 2016-06-02 00:00:00 BRT})] Nothing Nothing [] [] "" Nothing
+   , Activity "cd" 180 [(True,FromTo {from = 2016-06-02 00:00:00 BRT, to = 2016-07-03 00:00:00 BRT})]
+*** Falta roundeamento na funcao makeRestFromSeed em Project.hs
+*** E na funçao cycleToList tambem
+** DONE Problema: main para em DUNNO
+*** Resolvido: caso --- ??? da funcao makeActivityFromDurations
+** DONE Na hora de mergear com o State deve-se mudar cycle tambem para que o primeiro periodo seja corrigido
+** DONE Problema: Todas divisions devem ter um identificador, se o nome nao for dado pelo usuario, deve ter um id feito por computador
+** DONE Lembrete: quando 2 durations tem que ser colocadas no mesmo intervalo, a primeira deve acontecer primeiro que a segunda
+*** Para isso coloca-se um constraint??
+*** Funcao putConstraintsIfEqualInterval
+** DONE Lembrete: O mesmo para divisions
+*** Funcao putConstraints
+** DONE Problema: Os primeiros intervalos dos projeto as vezes sao muito estreitos
+*** Foi utilizada a funçao mayShift para usar apartir do proximo intervalo caso a duraçao do primeiro seja muito pequena
+*** SE dur do intervalo < 3 * maxima duraçao da atividade ENTAO o cycle eh shiftado
+** DONE Testar acordingtobien e ids e constaints
+** DONE Problema: mayshift deve levar em conta o bien
+** DONE Problemas com accordingtobien.
+*** Problema: eh necessario que se tire a parte antes do presente depois de shiftar o cycle
+*** Solved
+** DONE Infer: nao foram implementadas maneiras para estimar valores - isso deve ser melhor pensado
+*** Isso ai mesmo. Tem que ser assim.
+** Fazer comandos do tipo Costs
 ** Colocar 'message logs' na funçao infer
 ** Qual e a relaçao entre EndEvent e Totaltime? So existe 1 endevent por enquanto (effective total time)?
 *** Implementar isso dai - ainda nao implementado
 ** Verificar se a retirada de FromTo i i e equivocada ou nao nos arquivos passados
+*** Verificar se stripSomeThings e importante para o algoritmo ou se ela e inutil ou se ela ferra o esquema todo
+** Fazer funcao scheduler
+** Pensar em before e after Name. Como isso sera implementado???
+*** Ideia: considerar o dia
+** Lembrete : Fazer uma funcao que mostra graficamente a schedule
 * O que esta decidido
 ** Sleeping sera um projeto normal com prioridade maxima no algoritmo
 ** Sleeping_penalty e o projeto que substitui Sleeping em um caso de saturaçao. Isso pode ocorrer tambem para qualquer outro projeto.

@@ -62,9 +62,9 @@ makeCommand (keyw,args) = case keyw of
   "end"      -> EndC      $ notin args
 
   "after"       -> AfterC       $ after       args
-  "before"      -> BeforeC      $ before      args
+--  "before"      -> BeforeC      $ before      args
   "rightafter"  -> RightafterC  $ rightafter  args
-  "rightbefore" -> RightbeforeC $ rightbefore args
+--  "rightbefore" -> RightbeforeC $ rightbefore args
 
   "at"   -> AtC   $ at   args
   "msg"  -> MsgC  $ msg  args

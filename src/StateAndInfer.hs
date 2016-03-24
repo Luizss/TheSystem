@@ -1,3 +1,5 @@
+{-# language LambdaCase #-}
+
 module StateAndInfer where
 
 -------------------- Imports
@@ -9,6 +11,7 @@ import ProjectS
 import Data.Time
 import Data.Time.Clock
 import Control.Monad
+import Data.DateTime hiding (getCurrentTime)
 
 -------------------- Getting State
 
@@ -35,10 +38,6 @@ mergeStates
 mergeStates     [] projs = check projs
 mergeStates (s:ss) projs = mergeStates ss (mergeState s projs)
 
-check :: [(Name, ProjectS)] -> [(Name, ProjectS)]
-check [] = error "No projects to be made."
-check s  = s
-
 mergeState
   :: (Name, State) -> [(Name, ProjectS)] -> [(Name, ProjectS)]
 mergeState (name, state) projects
@@ -58,24 +57,85 @@ mergeState (name, state) projects
     errorMoreThanOneProject
       = error $ "More than one project with name " ++ name ++ "."
 
+{-                       
 merge :: (Name,ProjectS) -> State -> Maybe (Name,ProjectS)
 merge (name, ProjectS c d e t r) (State n ts)
+  | stepsDone n c d == Finished ||
+    timeSpent  ts t == Finished = Nothing
+  | otherwise =
+    let Unfinished (c', d') = stepsDone n (c, d)
+        Unfinished t' = timeSpent ts t
+    in Just (name, ProjectS c' d' e t' r)
+  where 
+    stepsDone
+      :: Maybe StepsDone
+      -> Maybe CycleS --
+      -> Maybe DurationS
+      -> IsFinished (Maybe CycleS, Maybe DurationS)
+    stepsDone Nothing c d = Unfinished (c,d)
+    stepsDone _ Nothing Nothing = Unfinished Nothing --
+    stepsDone _ c Nothing = Unfinished Nothing -- --
+    stepsDone _ Nothing d = Unfinished Nothing -- --
+    stepsDone (Just (StepsDone 0)) c d = Unfinished (c, d)
+    stepsDone (Just (StepsDone n)) _ (Just (DurationInfS d)) =
+      error $ show $ Unfinished $ Just $ DurationInfS $ rotate n d
+    stepsDone (Just (StepsDone n)) (Just c) (Just (DurationS d))
+      = case d of
+      [] -> Finished
+      (name,dds) : xs
+        | length dds > n ->
+          Unfinished $ (cycleDrop c n
+                       , Just $ DurationS $ (name,drop n dds) : xs)
+        | otherwise ->
+          stepsDone'
+          (StepsDone (n - length dds))
+          c
+          (DurationS xs)
+
+    cycleDrop :: CycleS -> Int -> CycleS
+    cycleDrop (CycleS times _ dur) m
+      = let firstTime   = ifZeroTimes $ mod m times
+            ifZeroTimes = \case
+              0 -> times
+              k -> k
+        in CycleS times firstTime dur
+    
+    stepsDone'
+      :: StepsDone
+      -> CycleS
+      -> DurationS
+      -> IsFinished (Maybe DurationS)
+    stepsDone' (StepsDone 0) _ _ = Finished
+    stepsDone' (StepsDone n) c (DurationS d)
+      = case d of
+      [] -> Finished
+      (name,dds) : xs
+        | length dds > n ->
+          Unfinished $ Just $ DurationS $ (name,drop n dds) : xs
+        | otherwise -> stepsDone'
+                       (StepsDone (n - length dds))
+                       c
+                       (DurationS xs)-}
+
+merge :: (Name,ProjectS) -> State -> Maybe (Name,ProjectS)
+merge (name, ProjectS c d e t r) (State m n ts)
   | stepsDone n  d == Finished ||
     timeSpent ts t == Finished = Nothing
   | otherwise =
     let Unfinished d' = stepsDone n d
         Unfinished t' = timeSpent ts t
-    in Just (name, ProjectS c d' e t' r)
+        c' = cycleStepsDone m c
+    in Just (name, ProjectS c' d' e t' r)
   where 
     stepsDone
-      :: Maybe StepsDone
+      :: Maybe DurationSteps
       -> Maybe DurationS
       -> IsFinished (Maybe DurationS)
     stepsDone Nothing d = Unfinished d
     stepsDone _ Nothing = Unfinished Nothing
     stepsDone (Just (StepsDone 0)) jd = Unfinished jd
     stepsDone (Just (StepsDone n)) (Just (DurationInfS d)) =
-      error $ show $ Unfinished $ Just $ DurationInfS $ rotate n d
+      Unfinished $ Just $ DurationInfS $ rotate n d
     stepsDone (Just (StepsDone n)) (Just (DurationS d)) = case d of
       [] -> Finished
       (name,dds) : xs
@@ -87,7 +147,7 @@ merge (name, ProjectS c d e t r) (State n ts)
           (DurationS xs)
 
     stepsDone'
-      :: StepsDone
+      :: DurationSteps
       -> DurationS
       -> IsFinished (Maybe DurationS)
     stepsDone' (StepsDone 0) _ = Finished
@@ -100,6 +160,14 @@ merge (name, ProjectS c d e t r) (State n ts)
         | otherwise -> stepsDone'
                        (StepsDone (n - length dds))
                        (DurationS xs)
+
+    cycleStepsDone
+      :: Maybe CycleSteps -> Maybe CycleS -> Maybe CycleS
+    cycleStepsDone Nothing jc = jc
+    cycleStepsDone _ Nothing = Nothing
+    cycleStepsSone (Just (StepsLeft k)) (Just (CycleS times _ dur))
+      | k  > times = error "k > times"
+      | otherwise  = Just (CycleS times k dur)
 
     timeSpent
       :: Maybe TimeSpent
@@ -167,15 +235,19 @@ type K        = Double
 infers
   :: [(Name,ProjectS)]
   -> [ProjectType]
-  -> IO [(Name, (CycleS,DurationS,Totaltime,RestS))]
+  -> IO [(Name, (CycleS,DurationS,Totaltime,Maybe Endpoint,RestS))]
 infers = zipWithM $ \(n,p) pt -> do
   r <- infer pt p
+  putStrLn $
+    "\n&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n\n"
+    ++ show (n,r) ++
+    "\n\n&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&\n"
   return (n,r)
 
 infer
   :: ProjectType
   -> ProjectS
-  -> IO (CycleS, DurationS, Totaltime,RestS)
+  -> IO (CycleS, DurationS, Totaltime, Maybe Endpoint, RestS)
 infer pType (ProjectS c d e t r) = putRest <$> case pType of
   CD    -> do
     let d' = stdDur d
@@ -240,6 +312,10 @@ infer pType (ProjectS c d e t r) = putRest <$> case pType of
     let c' = stdCycle c
     e' <- stdEndpoint e
     let t' = stdTotaltime t
+    putStrLn
+      $ "\n$$$$$$$$$$$$$$\n"
+      ++ show (t' / (c' * e'))
+      ++ "\n$$$$$$$$$\n"
     return (frj c, inferDur c' e' t', frj t)
   DET   -> do --
     let d' = stdDur d
@@ -272,12 +348,12 @@ infer pType (ProjectS c d e t r) = putRest <$> case pType of
     e' <- stdEndpoint e
     assert (floor $ c' * e') (floor k) "CD'ET: ce = k"
     return (frj c, d', frj t)
-  where putRest (a,b,c) = (a,b,c,r)
+  where putRest (a,b,c) = (a,b,c,e,r)
         
 ----- To Standard Types
 
 stdCycle :: Maybe CycleS -> CycleStd
-stdCycle (Just (CycleS times dur))
+stdCycle (Just (CycleS times _ dur))
   = fromIntegral times / fromIntegral mins
   where mins = durToMinutes dur
 
@@ -310,7 +386,7 @@ fromTotalStd = Totaltime . floor
 
 fromCycleStd :: CycleStd -> CycleS
 fromCycleStd timesPerMinutes
-  = CycleS 1
+  = CycleS 1 1
     $ Minutes
     $ floor
     $ 1 / timesPerMinutes
@@ -324,7 +400,8 @@ inferTotaltime :: DurStd -> Totaltime
 inferTotaltime = fromTotalStd . sum
 
 inferDur :: CycleStd -> EndStd -> TotalStd -> DurationS
-inferDur c e t = alwaysDur $ floor $ t / (c * e)
+inferDur c e t = alwaysDur $ ceiling $ t / (c * e)
+                 --floor $ t / (c * e)
 
 ----- Estimation (depois)
 
@@ -347,6 +424,7 @@ truncDurT :: Maybe DurationS -> TotalStd -> DurationS
 truncDurT d@(Just (DurationInfS xs)) t =
   let k = length
           $ takeWhile (<= t)
+          $ tail
           $ scanl (+) 0
           $ cycle
           $ stdDur d
@@ -356,26 +434,41 @@ truncDurCE :: Maybe DurationS -> CycleStd -> EndStd -> DurationS
 truncDurCE (Just (DurationInfS xs)) c e =
   let k = floor $ c * e
   in DurationS $ take k $ cycle xs
-
---- Truncar apos a funçao infer
-truncate :: (CycleS, DurationS, Totaltime, RestS) -> IO DurationS
-truncate (c, dur, t, _) = case (dur, t) of
+     
+truncate
+  :: (CycleS, DurationS, Totaltime, Maybe Endpoint, RestS)
+  -> IO DurationS
+truncate (c, dur, t, me, _) = case (dur, t) of
   (DurationS    d,                     _) -> return $ DurationS d
-  (DurationInfS d, Totaltime           m) -> return $ trunc d m
-  (DurationInfS d, EffectiveTotaltime em) -> return $ trunc d em
+  (DurationInfS d, Totaltime           t) -> return $ trunc d t
+  (DurationInfS d, EffectiveTotaltime tm) -> return $ trunc d tm
   (DurationInfS d,              Infinity) -> truncMaximum d c
   where
-    trunc d m =
-      let k = length
-              $ takeWhile (<= m)
-              $ scanl (+) 0
-              $ cycle
-              $ toStds d
-      in DurationS $ take k $ cycle d
+    trunc d t = case me of
+      Nothing -> error "truncate nothing err"
+      Just  _ -> DurationS $ roundLastDur $ take (k+1) $ cycle d
+      where
+        k = length
+            $ takeWhile (<= t)
+            $ tail
+            $ scanl (+) 0
+            $ cycle
+            $ toStds d
+        roundLastDur
+          :: [(Maybe Name, [(Maybe Name, Dur, Interval Dur)])]
+          -> [(Maybe Name, [(Maybe Name, Dur, Interval Dur)])]
+        roundLastDur = case c of
+          CycleS i _ _ -> changeLasts roundLast
 
-    toStds
-      = map (fromIntegral . sum . map durToMinutes . takeDurations)
+        roundLast (mn1, [(mn2, dur, int)]) =
+          let h = durToMinutes dur
+          in (mn1, [(mn2, Minutes $ mod t h, int)])
 
+    changeLasts f s = init s ++ [f (last s)]
+    
+    toStds = map toStd
+    toStd  = fromIntegral . sum . map durToMinutes . takeDurations
+    
     takeDurations (_,l) = map (\(_,d,_) -> d) l
 
     truncMaximum d c = do
@@ -387,11 +480,15 @@ truncate (c, dur, t, _) = case (dur, t) of
 
     getMaximumEndpoint = do
       now <- getCurrentTime
-      let end = addUTCTime oneYear now
-          oneYear = fromIntegral ((durToMinutes (Months 12)) * 60)
+      let end = addMinutes oneYear now --addUTCTime oneYear now
+          oneYear = fromIntegral (durToMinutes (Months 12))-- * 60)
           t = (diffUTCTime end now) / 60
+      putStrLn
+        $ "))))))))))))))))))"
+        ++ show (now,end)
+        ++ "(((((((((((((((("
       return $ realToFrac t
-
+      
 ----- Asserting
     
 assert :: (Show a,Eq a) => a -> a -> String -> IO ()
@@ -406,6 +503,10 @@ assert a b formula
     ++ formula ++ "."
 
 -------------------- Helper Functions
+
+check :: [a] -> [a]
+check [] = error "No projects to be made."
+check s  = s
 
 len :: DurStd -> Double
 len = fromIntegral . length
@@ -439,8 +540,8 @@ frj (Just x) = x
 
 -- teste da funçao mergeStates
 teste = mergeStates
-  [("itsme", State Nothing (Just (TimeSpent 5)))
-  ,("heheh", State (Just (StepsDone 1)) Nothing)]
+  [("itsme", State Nothing Nothing (Just (TimeSpent 5)))
+  ,("heheh", State Nothing (Just (StepsDone 1)) Nothing)]
   [("heheh", ProjectS
              Nothing
              (
@@ -482,7 +583,7 @@ tst = do
   end <- stdEndpoint
          (Just
           (Endpoint (fromGregToZoned zone (2016,3,16,12,0,0))))
-  let c' = stdCycle (Just (CycleS 1 (Weeks 1)))
+  let c' = stdCycle (Just (CycleS 1 undefined (Weeks 1)))
       k = c' * end
   print k
   putStrLn "--------------"

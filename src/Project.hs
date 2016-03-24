@@ -1,4 +1,4 @@
-{-# language TupleSections #-}
+{-# language TupleSections, LambdaCase #-}
 
 module Project where
 
@@ -17,14 +17,14 @@ import StateAndInfer
 -------------------- Transformations
 
 transforms
-  :: [(Name, (CycleS, DurationS, Totaltime, RestS))]
+  :: [(Name, (CycleS, DurationS, Totaltime, Maybe Endpoint, RestS))]
   -> IO [(Name, Project)]
 transforms = mapM (\(n,t) -> (n,) <$> transform t)
-  
+
 transform
-  :: (CycleS, DurationS, Totaltime, RestS)
+  :: (CycleS, DurationS, Totaltime, Maybe Endpoint, RestS)
   -> IO Project
-transform p@(c,d,_,r) = do
+transform p@(c,d,_,me,r) = do
   d' <- truncate p
   c' <- mergeCycleAndIntervalConstraint c r
   let d'' = mergeDurationAndMsg d' r
@@ -35,15 +35,109 @@ transform p@(c,d,_,r) = do
     newRest (RestS _ place _ constrs costs)
       = RestP place constrs costs
 
+left :: DoubleLinked a -> DoubleLinked a
+left same@(DL left x right) = case left of
+  []   -> same
+  l:ls -> DL ls l (x:right)
+
+right :: DoubleLinked a -> DoubleLinked a
+right same@(DL left x right) = case right of
+  []   -> same
+  r:rs -> DL (x:left) r rs
+
+leftForever :: DoubleLinked a -> DoubleLinked a
+leftForever dl@(DL [] _ _) = dl
+leftForever dl = leftForever (left dl)
+
+toDoubleLinked :: [a] -> DoubleLinked a
+toDoubleLinked (l:lst) = DL [] l lst
+toDoubleLinked _ = error "Nope"
+
+fromDoubleLinked :: DoubleLinked a -> [a]
+fromDoubleLinked (DL left middle right)
+  = reverse left ++ [middle] ++ right
+
+projectsInOrder :: [(Name,Project)] -> [(Name, Project)]
+projectsInOrder [] = []
+projectsInOrder pr
+  = fromDoubleLinked $ inOrder' $ toDoubleLinked $ pr
+  where
+    inOrder'
+      :: DoubleLinked (Name, Project)
+      -> DoubleLinked (Name, Project)
+    inOrder' = inOrder 30
+
+    inOrder
+      :: Int
+      -> DoubleLinked (Name, Project)
+      -> DoubleLinked (Name, Project)
+    inOrder _ dl@(DL _ _ []) = dl
+    inOrder 0 _ = error "After constraints problem :/"
+    inOrder n dl@(DL before npr after)
+      = checkConstraints (constr npr)
+      where
+
+        constr (_ , Project _ _ (RestP _ c _)) = c
+
+        checkConstraints
+          :: [Constraint]
+          -> DoubleLinked (Name, Project)
+        checkConstraints [] = inOrder (n-1) (right dl)
+        checkConstraints (c:cs) = case c of
+          RightAfter na -> cases na
+                           (isRightBefore na before)
+                           (isThere na after)
+          After      na -> cases na
+                           (isThere na before)
+                           (isThere na after)
+          AfterID     _ -> checkConstraints cs
+          where 
+            cases _ True _ = checkConstraints cs
+            cases na False True =
+              let (after', p) = takeProjectOut na after
+                  before' = putProjectIn p before
+              in inOrder
+                 (n-1)
+                 (leftForever $ DL before' npr after')
+            cases _ False False = checkConstraints cs
+
+        isRightBefore :: Name -> [(Name, Project)] -> Bool
+        isRightBefore name ((name', _) : _) = name == name'
+        isRightBefore _ _ = False
+
+        isThere :: Name -> [(Name, Project)] -> Bool
+        isThere name = isNotEmpty . filter ((==name) . fst)
+          where isNotEmpty [] = False
+                isNotEmpty _  = True
+
+        takeProjectOut
+          :: Name
+          -> [(Name,Project)]
+          -> ([(Name,Project)], (Name, Project))
+        takeProjectOut name xs
+          = ( filter ((/=name) . fst) xs
+            , check (filter ((==name) . fst) xs))
+          where
+            check = \case
+              []  -> error "?????0??????"
+              [x] -> x
+              _   -> error "??????2???"
+
+        putProjectIn
+          :: (Name,Project)
+          -> [(Name, Project)]
+          -> [(Name, Project)]
+        putProjectIn p ps = ps ++ [p]
+
 -------------------- Duration And Message Merging
 
 mergeDurationAndMsg
   :: DurationS -> RestS -> DurationP
-mergeDurationAndMsg (DurationS d) restS = case restS of
-  RestS _ _ Nothing _ _ ->
+mergeDurationAndMsg (DurationS d) (RestS _ _ mm _ _) = case mm of
+  Nothing ->
     DurationP $ map (\(a,b) -> (a, Nothing, b)) d
-    
-  RestS _ _ (Just msg) _ _ ->
+
+  Just msg ->
     DurationP $ case msg of
       Msg  txt  -> map (\(a,b) -> (a, Just txt, b)) d
       Msgs txts
@@ -52,37 +146,37 @@ mergeDurationAndMsg (DurationS d) restS = case restS of
         | otherwise
           -> zipWith (\(a,b) txt -> (a, Just txt, b)) d txts
              ++ drop
-             (length txts - length d)
+             (length txts)
              (map (\(a,b) -> (a,Nothing,b)) d)
 
 -------------------- Cycle And Interval Constraints Merging
       
 mergeCycleAndIntervalConstraint
   :: CycleS -> RestS -> IO CycleP
-mergeCycleAndIntervalConstraint c rest = case rest of
-  RestS      Nothing  _ _ _ _ -> do
+mergeCycleAndIntervalConstraint c (RestS ic _ _ _ _) = case ic of
+  Nothing     -> do
     ci <- cycleToListOfIntervals c
     return $ CycleP B (map stripSomeThings ci) -- B?
-  RestS (Just iConsS) _ _ _ _ -> do
+  Just iConsS -> do
     mi <- makeIntervalConstraint iConsS
     ci <- cycleToListOfIntervals c
     return $ mergeBoth ci mi
 
 cycleToListOfIntervals
   :: CycleS -> IO [(Int, [InOrOut (Interval ZonedTime)])]
-cycleToListOfIntervals (CycleS times dur) = case dur of
+cycleToListOfIntervals (CycleS times firstTime dur) = case dur of
   Minutes m -> putTimes <$> makeCycleList nextMinuteSeed
   Hours   h -> putTimes <$> makeCycleList nextHourSeed
   Days    s -> putTimes <$> makeCycleList nextDaySeed
   Weeks   w -> putTimes <$> makeCycleList nextWeekSeed
   Months mo -> putTimes <$> makeCycleList nextMonthSeed
   plus -> cycleToListOfIntervals
-          $ CycleS times
+          $ CycleS times firstTime
           $ Minutes
           $ durToMinutes plus
   where
     durMins = durToMinutes dur
-    
+
     makeCycleList
       :: (ZonedTime -> ZonedTime)
       -> IO [[InOrOut (Interval ZonedTime)]]
@@ -96,36 +190,22 @@ cycleToListOfIntervals (CycleS times dur) = case dur of
     makeRestFromSeed
       :: ZonedTime -> [[InOrOut (Interval ZonedTime)]]
     makeRestFromSeed z =
-      let nextMark = addMinutesZoned durMins z
+      let nextMark = roundIfMonth $ addMinutesZoned durMins z
+          roundIfMonth = case dur of
+            Months mo -> roundAtMonth
+            _         -> id
       in [(True, FromTo z nextMark)] : makeRestFromSeed nextMark
 
     addMinutesZoned :: Minutes -> ZonedTime -> ZonedTime
     addMinutesZoned x z =
       let (y,mo,d,h,m,s) = fromZonedToGreg z
       in fromGregToZoned (getZone z) (y,mo,d,h,m+x,s)
-         
+
     putTimes
       :: [[InOrOut (Interval ZonedTime)]]
       -> [(Int, [InOrOut (Interval ZonedTime)])]
-    putTimes = map (\x -> (times,x))
-
-    nextTemplate
-      :: (Gregorian -> Gregorian) -> ZonedTime -> ZonedTime
-    nextTemplate f z =
-      fromGregToZoned (getZone z) $ f $ fromZonedToGreg z
-      
-    nextMinuteSeed
-      = nextTemplate (\(y,mo,d,h,m,_) -> (y,mo,d,h,m+1,0))
-    nextHourSeed
-      = nextTemplate (\(y,mo,d,h,_,_) -> (y,mo,d,h+1,0,0))
-    nextDaySeed
-      = nextTemplate (\(y,mo,d,_,_,_) -> (y,mo,d+1,0,0,0))
-    nextWeekSeed z
-      = fromWeekDateToZoned (getZone z)
-        $ (\(y,wk,_) -> (y,wk+1,0))
-        $ fromZonedToWeekDate z
-    nextMonthSeed
-      = nextTemplate (\(y,mo,_,_,_,_) -> (y,mo+1,1,0,0,0))
+    putTimes     [] = []
+    putTimes (x:xs) = (firstTime, x) : map (\a -> (times,a)) xs
 
 mergeBoth
   :: [(Int, [InOrOut (Interval ZonedTime)])]
@@ -153,6 +233,8 @@ mergeBoth cycleList intervalConstrList =
         : mergeBoth' xs lst
 
 --- funçao para retirar alguns intervalos inuteis
+--- tudo fica quebrado por causa dessa funçao
+--- ou tudo funciona por causa dessa funçao?
 stripSomeThings
     :: (Int,[InOrOut (Interval ZonedTime)])
     -> (Int,[InOrOut (Interval ZonedTime)])
@@ -211,7 +293,7 @@ makeIntervalConstraint intS = case intS of
       December   -> makeIntervals isDecember  (Months 1) (Months 12)
 
       Interval i -> do
-        now <- getZonedTime
+        now   <- getZonedTime
         zTime <- propag $ fmap fromInstantToCompleteTime i
         let FromTo fr to = onlyFromTo zTime
         return
@@ -257,7 +339,7 @@ makeIntervalConstraint intS = case intS of
     onlyFromTo (OrMore   t) = FromTo t (add1Year t)
     onlyFromTo NoInterval   = NoInterval
 
-    add1Year = addTime (durToMinutes (Months 12))
+    add1Year = addTime (durToMinutes (Months 13))
 
 {- Entendimento dessa funçao exige uma certa teoria
    Ela pega o momento atual e retorna uma lista de intervalos
@@ -311,8 +393,12 @@ makeIntervals isIn dur per = do
       (True, FromTo seed to)
       : (False, FromTo to newSeed)
       : makeRestFromSeed newSeed
-      where to = addTime durMin seed
-            newSeed = addTime perMin seed
+      where
+        to = roundIfMonth $ addTime durMin seed
+        newSeed = roundIfMonth $ addTime perMin seed
+        roundIfMonth = case per of
+          Months mo -> roundAtMonth
+          _         -> id
 
 mergeIntervals
   :: (Bool -> Bool -> Bool)
@@ -403,6 +489,55 @@ isOctober   = isMonth (==10)
 isNovember  = isMonth (==11)
 isDecember  = isMonth (==12)
 
+------------------- Rounding Functions
+
+roundAt6Hours :: ZonedTime -> ZonedTime
+roundAt6Hours time =
+  let zone = getZone time
+      (y,mo,d,h,_,_) = fromZonedToGreg time
+      rounded
+        | h >= 0  && h < 6   = 0
+        | h >= 6  && h < 12  = 6 
+        | h >= 12 && h < 18  = 12
+        | h >= 18 && h <= 23 = 18
+  in fromGregToZoned zone (y,mo,d,rounded,0,0)
+
+roundAtDay :: ZonedTime -> ZonedTime
+roundAtDay time =
+  let zone = getZone time
+      (y,mo,d,_,_,_) = fromZonedToGreg time
+  in fromGregToZoned zone (y,mo,d,0,0,0)
+
+roundAtWeek :: ZonedTime -> ZonedTime
+roundAtWeek time =
+  let zone = getZone time
+      (y,w,d) = fromZonedToWeekDate time
+  in fromWeekDateToZoned zone (y,w,1)
+
+roundAtMonth :: ZonedTime -> ZonedTime
+roundAtMonth time =
+  let zone = getZone time
+      (y,mo,_,_,_,_) = fromZonedToGreg time
+  in fromGregToZoned zone (y,mo,1,0,0,0)
+
+nextTemplate
+  :: (Gregorian -> Gregorian) -> ZonedTime -> ZonedTime
+nextTemplate f z =
+  fromGregToZoned (getZone z) $ f $ fromZonedToGreg z
+      
+nextMinuteSeed
+  = nextTemplate (\(y,mo,d,h,m,_) -> (y,mo,d,h,m+1,0))
+nextHourSeed
+  = nextTemplate (\(y,mo,d,h,_,_) -> (y,mo,d,h+1,0,0))
+nextDaySeed
+  = nextTemplate (\(y,mo,d,_,_,_) -> (y,mo,d+1,0,0,0))
+nextWeekSeed z
+  = fromWeekDateToZoned (getZone z)
+    $ (\(y,wk,_) -> (y,wk+1,0))
+    $ fromZonedToWeekDate z
+nextMonthSeed
+  = nextTemplate (\(y,mo,_,_,_,_) -> (y,mo+1,1,0,0,0))
+
 -------------------- Testes
 
 u = undefined
@@ -410,7 +545,7 @@ u = undefined
 bla = do
   CycleP bien lst <-
     mergeCycleAndIntervalConstraint
-    (CycleS 2 (Weeks 2))
+    (CycleS 2 1 (Weeks 2))
     (RestS Nothing u u u u)
 --    (RestS (Just (NotinS (Or Sunday Thursday))) u u u u)
   return $ CycleP bien (take 20 lst)

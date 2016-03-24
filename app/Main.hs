@@ -9,6 +9,7 @@ import ProjectS
 import StateAndInfer
 import Project
 import Activities
+import Scheduler
 
 newLine = putStrLn ""
 
@@ -35,20 +36,32 @@ main = do
         $ recognizeCommands projs
   newLine
   let ls' = read (show ls) :: [(Name, ProjectS)]
-      equal = ls == ls'
+      equal = ls == ls'  
   st <- getState
   let ls'' = mergeStates st ls'
   r<-infers ls'' y
   putStrLn "---------&&&&&---------"
-  print y
+--  print y
   print equal
   putStrLn "---------&&&&&---------"
-  print ls''
+--  print ls''
   putStrLn "---------&&&&&---------"
   print r
   putStrLn "---------&&&&&---------"
   ts <- transforms r
   print ts
+  putStrLn "---------&&&&&---------"
+  let g = projectsInOrder ts
+  print g
+  putStrLn "---------&&&&&---------"
+  print $ help g == help ts
+  print $ {-map (\x -> (getName x, head (getOkInterval x))) $ map (\x -> (getName x, getId x, getConstraints x)) $-} activitiesFromProjects [g !! 4] --ts
+  (ts',ini) <- stripPasts $ activitiesFromProjects [g !! 4]
+  putStrLn "---------&&&&&---------"
+  print $ {-map (\x -> (getName x, head (getOkInterval x))) $ map (\x -> (getName x, getId x, getConstraints x)) $-} ts' --ts
+  let yt = limitSchedule $ scheduler ini ts'
+  putStrLn "---------&&&&&---------"
+  print (filter (\(b,t) -> b) (leaves yt))
 {-  asd <- mapM
          (\(n,l) -> do l' <- truncate l
                        return (n,stdDur (Just l')))
@@ -67,3 +80,5 @@ stdDur d = case d of
                  . takeDurations)
     takeDurations (_,l) = map (\(_,d,_) -> d) l
 -}
+
+help = map (\(n,x) -> n)

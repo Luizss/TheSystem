@@ -47,9 +47,9 @@ commandType comm = case comm of
   EndC _                -> ICons
   
   AfterC _              -> ConsT
-  BeforeC _             -> ConsT
+--  BeforeC _             -> ConsT
   RightafterC _         -> ConsT
-  RightbeforeC _        -> ConsT
+-- RightbeforeC _        -> ConsT
   
   AtC _                 -> PlaceT
   
@@ -232,7 +232,7 @@ makeProject csUnsorted = case projectTypeHandlingErrors cs of
 ----- Cycle, Duration, Endpoint, Totaltime Construction
     
 cycl :: Command -> CycleS
-cycl (CycleC num time) = CycleS num time --(durToMinutes time)
+cycl (CycleC num time) = CycleS num num time --(durToMinutes time)
 cycl _ = error "cycl: Wrong command type."
 
 duration :: Command -> DurationS
@@ -420,9 +420,9 @@ constr = map commandToConstr . filter ((== ConsT) . commandType)
     commandToConstr :: Command -> Constraint
     commandToConstr comm = case comm of
       AfterC       name -> After       name
-      BeforeC      name -> Before      name
+--      BeforeC      name -> Before      name
       RightafterC  name -> RightAfter  name
-      RightbeforeC name -> RightBefore name
+--      RightbeforeC name -> RightBefore name
 
 -- Costs
 
@@ -469,8 +469,8 @@ durToMinutes dur = case dur of
   Minutes  m -> m
   Hours    h -> h*60
   Days     d -> d*1440
-  Weeks    w -> w*10080
-  Months  mo -> mo*302400
+  Weeks    w -> w*10080  -- 60 * 24 * 7
+  Months  mo -> mo*44640 -- 60 * 24 * 31
   Plus   x y -> durToMinutes x + durToMinutes y
 
 -- ZonedTime Manipulation Functions
@@ -506,34 +506,3 @@ fromWeekDateToZoned
 fromWeekDateToZoned zone (y',w',d') =
   let (y,mo,d) = C.toGregorian $ fromWeekDate y' w' d'
   in fromGregToZoned zone (y,mo,d,0,0,0)
-
--- Rounding Functions
-
-roundAt6Hours :: ZonedTime -> ZonedTime
-roundAt6Hours time =
-  let zone = getZone time
-      (y,mo,d,h,_,_) = fromZonedToGreg time
-      rounded
-        | h >= 0  && h < 6   = 0
-        | h >= 6  && h < 12  = 6 
-        | h >= 12 && h < 18  = 12
-        | h >= 18 && h <= 23 = 18
-  in fromGregToZoned zone (y,mo,d,rounded,0,0)
-
-roundAtDay :: ZonedTime -> ZonedTime
-roundAtDay time =
-  let zone = getZone time
-      (y,mo,d,_,_,_) = fromZonedToGreg time
-  in fromGregToZoned zone (y,mo,d,0,0,0)
-
-roundAtWeek :: ZonedTime -> ZonedTime
-roundAtWeek time =
-  let zone = getZone time
-      (y,w,d) = fromZonedToWeekDate time
-  in fromWeekDateToZoned zone (y,w,1)
-
-roundAtMonth :: ZonedTime -> ZonedTime
-roundAtMonth time =
-  let zone = getZone time
-      (y,mo,_,_,_,_) = fromZonedToGreg time
-  in fromGregToZoned zone (y,mo,1,0,0,0)

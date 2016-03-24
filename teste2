@@ -1,14 +1,28 @@
 Aula Tal => durs 1h, 2h
-         & endpoint 15/03 10h
-         & cycle 2 in 1 Week.
+         & endpoint 2/04 10h
+         & cycle 2 in 1 Week
+         & after cet & after cde.
 
-Palestra3 => cycle 1 in 1 Week & endpoint 17/7/2016 & totaltime 30h.
 
-cd => cycle 2 in 1 Day & dur 3h.
+cet => cycle 1 in 1 Week & endpoint 17/7/2016 & totaltime 30h & after divtest & after cd.
 
-cet => cycle 2 in 1 Day & endpoint 17/7/2016 & dur 3h.
+cd => cycle 1 in 3 Month & dur 3h.
 
-Palestra2 => cycle 3 in 1 Week & endpoint 17 & totaltime 30h
+cde => cycle 2 in 1 Day & endpoint 17/7/2016 & dur 3h.
+
+Palestra2 => cycle 3 in 1 Week & endpoint 17/4 & totaltime 30h
           & msgs Hey you; Brown\cow; yea
-          & notin (thursdays or fridays) and 3/3 15h - 3/3 17h and 6/3 15h - 7/3 17h
+          & notend (thursdays or fridays)
           & at UNB.
+
+divtest => divsn 
+              asdasd : 30m, 1h - 6h, 
+              hey : 15m, none ;
+              
+              wat : 30m, 1h - 6h,
+              brown : 15m, none;
+              
+              now: 30m, 1h - 6h,
+              cow : 15m, none &
+              endpoint 30/4.
+              

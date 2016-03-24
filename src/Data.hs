@@ -1,3 +1,5 @@
+{-# language DeriveFunctor #-}
+
 module Data where
 
 ----------------- Imports
@@ -113,9 +115,9 @@ data Command
 
   -- Constraints
   | AfterC Name
-  | BeforeC Name
+--  | BeforeC Name
   | RightafterC Name
-  | RightbeforeC Name
+-- | RightbeforeC Name
 
   -- Place
   | AtC Name
@@ -198,7 +200,7 @@ data RestS
   deriving (Show, Read, Eq)
 
 data CycleS
-  = CycleS Int Dur
+  = CycleS Int {-new-} Int Dur
   deriving (Show, Read, Eq)
 
 data DurationS
@@ -228,10 +230,12 @@ data IntervalConstraintS
   deriving (Show, Read, Eq)
 
 data Constraint
-  = After Name
-  | Before Name
-  | RightAfter Name
-  | RightBefore Name
+  = RightAfter Name
+  | After Name
+--  | Before Name
+  | AfterID Id --
+--  | BeforeID Id --
+--  | RightBefore Name
   deriving (Show,Read,Eq)
 
 data Place
@@ -253,8 +257,12 @@ instance Ord ZonedTime where
 
 ----------------- State And Infer
 
-newtype StepsDone
+newtype DurationSteps
   = StepsDone Int
+  deriving (Show, Read, Eq)
+
+newtype CycleSteps
+  = StepsLeft Int
   deriving (Show, Read, Eq)
 
 newtype TimeSpent
@@ -262,7 +270,10 @@ newtype TimeSpent
   deriving (Show, Read, Eq)
 
 data State
-  = State (Maybe StepsDone) (Maybe TimeSpent)
+  = State
+    (Maybe CycleSteps)
+    (Maybe DurationSteps)
+    (Maybe TimeSpent)
   deriving (Show, Read, Eq)
 
 data IsFinished x
@@ -272,6 +283,8 @@ data IsFinished x
 ----------------- Project
 
 type Message = String
+
+data DoubleLinked a = DL [a] a [a] deriving Show
 
 data Project
   = Project CycleP DurationP RestP
@@ -324,39 +337,61 @@ data IntervalConstraint
 
 ----------------- Activities
 
+type DurH
+  = (Maybe Name, Maybe Message
+    , [(Maybe Name, Dur, Interval Dur)])
+type DursH       = [DurH]
 type MaxDuration = Minutes
 type OkInterval  = [InOrOut (Interval ZonedTime)]
-data EndEvent    = EndEvent
+data EndEvent    = EndEvent deriving (Show,Eq,Read)
+
+data Id
+  = NoIdYet | Id Int
+  deriving (Read, Eq, Ord, Show)
 
 data Activity
-  = Activity
-    Name
-    MaxDuration
-    OkInterval
-    (Maybe Place)
-    (Maybe EndEvent)
-    [Constraint]
-    [Cost]
-    Message
-    (Maybe ((Interval Dur), Activity))
+  = Activity {
+      getName :: Name
+    , getId :: Id
+    , getMaxDuration :: MaxDuration
+    , getOkInterval :: OkInterval
+    , getMaybePlace :: (Maybe Place)
+    , getMaybeEndEvent :: (Maybe EndEvent)
+    , getConstraints :: [Constraint]
+    , getCosts :: [Cost]
+    , getMessage :: Message
+    , getMaybeDiv :: (Maybe (Interval Dur, Activity))
+    } deriving (Show,Eq,Read)
 
 ----------------- Schedule
 
-type Schedule = [ScheduleUnit]
+type Schedule = [Slot]
 
-data ScheduleUnit
-  = ScheduleUnit
-    ActivityPrim
+type OkSchedule = [(Bool, Slot)]
+
+data Slot
+  = Slot
+    (Maybe ActivityPrim)
     (Interval ZonedTime) -- fromto
-    Place
-    EndEvent
+  deriving (Show, Read, Eq)
 
 data ActivityPrim
   = ActivityPrim
     Name
+    Id
     Message
     MaxDuration
-    
+    [Constraint]
+    (Maybe Place)
+    (Maybe EndEvent)
+  deriving (Show, Read, Eq)
+
+data Tree a
+  = Tree a [Tree a]
+    deriving (Show, Read, Eq, Functor)
+
+--data WinFail a = Fail a | Win a
+
 ----------------- Total Project
 
 data TotalProject' =
@@ -387,23 +422,3 @@ data AddOn' = Constraint' Constraint
             | Place' Place
             | Cost' Cost
             deriving (Show, Read, Eq)
-
-{-
-data Project =
-    CD    Cycle Duration AddOns
-  | CD'   Cycle Duration AddOns
-  | DE    Duration Endpoint AddOns
-  | CE    Cycle Endpoint AddOns
-  | ET    Endpoint Totaltime AddOns
-  | CT    Cycle Totaltime AddOns
-  | CDE   Cycle Duration Endpoint AddOns -- r
-  | CD'E  Cycle Duration Endpoint AddOns 
-  | CDT   Cycle Duration Totaltime AddOns -- r
-  | CD'T  Cycle Duration Totaltime AddOns
-  | CET   Cycle Endpoint Totaltime AddOns
-  | DET   Duration Endpoint Totaltime AddOns -- r
-  | D'ET  Duration Endpoint Totaltime AddOns
-  | CDET  Cycle Duration Endpoint Totaltime AddOns -- r
-  | CD'ET Cycle Duration Endpoint Totaltime AddOns -- r
-  deriving (Show, Read, Eq)
--}
